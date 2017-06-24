@@ -1,0 +1,4370 @@
+---
+title: 
+  "Red and White Wine Analysis of Factors that contribute to Quality Scores"
+author: 
+  "Ashley Goodman"
+date: "March 25, 2017" 
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+---
+
+
+```{r packages, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,                 cache.path = 'cache/', fig.path='figure/'}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk. This
+# prevents the code from displaying in the knitted HTML output. You should set
+# echo=FALSE for all code chunks in your file, unless it makes sense for your
+# report to show the code that generated a particular plot.
+
+# The other parameters for "message" and "warning" should also be set to FALSE
+# for other code chunks once you have verified that each plot comes out as you
+# want it to. This will clean up the flow of your report.
+
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(lattice)
+library(GGally)
+library(scales)
+library(memisc)
+library(car)
+library(MASS)
+library(reshape2)
+library(dplyr)
+
+```
+
+```{r Load_the_Data, echo=FALSE, message=FALSE, warning=FALSE, , cache=TRUE,                 cache.path = 'cache/', fig.path='figure/'}
+# Load the Data
+rw <- read.csv('wineQualityReds.csv', header=T)
+ww <- read.csv('wineQualityWhites.csv', header=T)
+
+# these dup dataframes wil be used later
+duprw <- read.csv('wineQualityReds.csv', header=T)
+dupww <- read.csv('wineQualityWhites.csv', header=T)
+
+
+# removing the X varaiable as it is not required for this analysis
+rw <- subset(rw, select= -X)
+ww <- subset(ww, select= -X)
+
+# adding new factor variable: sweet
+
+rw$sweet[rw$residual.sugar<= 4 ] <- 'Dry'
+rw$sweet[rw$residual.sugar > 4 & rw$residual.sugar <= 12] <-'Medium Dry' 
+rw$sweet[rw$residual.sugar > 12 & rw$residual.sugar <= 45]  <- 'Medium' 
+rw$sweet[rw$residual.sugar > 45] <- 'Sweet'
+rw$sweet = factor(rw$sweet,levels=c("Dry","Medium Dry","Medium","Sweet"), 
+                  ordered=TRUE)
+
+
+ww$sweet[ww$residual.sugar<= 4 ] <- 'Dry'
+ww$sweet[ww$residual.sugar > 4 & ww$residual.sugar <= 12] <-'Medium Dry' 
+ww$sweet[ww$residual.sugar > 12 & ww$residual.sugar <= 45]  <- 'Medium' 
+ww$sweet[ww$residual.sugar > 45] <- 'Sweet'
+ww$sweet = factor(ww$sweet,levels=c("Dry","Medium Dry","Medium","Sweet"),
+                  ordered=TRUE)
+```
+
+# Introduction
+
+This report explores 2 data-sets containing quality scores and attributes for approximately 6,500 wines; 1599 Red wines and 4,898 White wines.  
+
+I used UC Davis UoC Waterhouse Lab (http://waterhouse.ucdavis.edu/), Practical 
+Winery & Vineyard Journal (https://www.practicalwinery.com/) and the Australian 
+Wine Research Institute (https://www.awri.com.au/) websites as sources of 
+further information for insights into the variables contained in the wine 
+data-set and how they might contribute to the quality score or relate to each 
+other.  
+ 
+Various other sources were used in my research for things like creating new 
+categorical labels or better understanding relationships between variables. I 
+have itemized the source and its use purpose in the list below.  
+
+Additional resources
+
+* https://en.wikipedia.org/wiki/Sweetness_of_wine : Used to create the 
+categorical variable Sweet
+* http://chemistry.elmhurst.edu/vchembook/184ph.html : Understanding pH
+* https://www.reference.com/science/ph-level-sugar-b4748abdf49c1d6b : 
+Understanding pH of sugar
+
+
+
+### Citations
+
+_The dataset used is public available for research. The details are described in [Cortez et al., 2009]._ 
+
+_The original curators of this dataset request the following citation be_ 
+_included:_
+
+_P. Cortez, A. Cerdeira, F. Almeida, T. Matos and J. Reis._
+_Modeling wine preferences by data mining from physicochemical properties._
+_In Decision Support Systems, Elsevier, 47(4):547-553. ISSN: 0167-9236._
+  
+_Available at: [@Elsevier] http://dx.doi.org/10.1016/j.dss.2009.05.016_
+        _[Pre-press (pdf)] http://www3.dsi.uminho.pt/pcortez/winequality09.pdf_
+        _[bib] http://www3.dsi.uminho.pt/pcortez/dss09.bib_
+    
+
+
+
+### The structure of the data:
+
+
+Input variables (based on physicochemical tests):
+
+* Fixed acidity (tartaric acid - g / dm^3^) 
+* Volatile acidity (acetic acid - g / dm^3^)
+* Citric acid (g / dm^3^)
+* Residual sugar (g / dm^3^)
+* Chlorides (sodium chloride - g / dm^3^)
+* Free sulfur dioxide (mg / dm^3^)
+* Total sulfur dioxide (mg / dm^3^)
+* Density (g / cm^3^)
+* pH
+* Sulphates (potassium sulphate - g / dm^3^)
+* Alcohol (% by volume)
+* Color (a factor) created before loading the data
+  
+    
+Output variable (based on sensory data): 
+
+* Quality (score between 0 and 10)
+
+  
+
+Notes on measurements:
+
+* A dm^3^ is a cubic decimeter. Equals 1 liter
+* A cm^3^ is a cubic centimeter. Equals 0.001 liters
+* The measurements vary between grams and milligrams
+* Alcohol is a % by volume
+* I may make changes to the units of measurement in order to standardize them 
+for better analysis, should it prove useful
+* As each of the variables vary so much between each other and each can have significant impact on perceived quality I may standardize them using standard deviations should it prove useful to the correlation to quality analysis 
+
+  
+   
+Description of attributes:
+
+* Fixed acidity: most acids involved with wine or fixed or nonvolatile (do not evaporate readily)
+* Volatile acidity: the amount of acetic acid in wine, which at too high of 
+levels can lead to an unpleasant, vinegar taste
+* Citric acid: found in small quantities, citric acid can add 'freshness' and 
+flavor to wines
+* Residual sugar: the amount of sugar remaining after fermentation stops, it's
+rare to find wines with less than 1 gram/liter and wines with greater than 45 grams/liter are considered sweet
+* Chlorides: the amount of salt in the wine
+* Free sulfur dioxide: the free form of SO2 exists in equilibrium between 
+molecular SO2 (as a dissolved gas) and bisulfite ion; it prevents microbial 
+growth and the oxidation of wine 
+* Total sulfur dioxide: amount of free and bound forms of S02; in low 
+concentrations, SO2 is mostly undetectable in wine, but at free SO2 
+concentrations over 50 ppm, SO2 becomes evident in the nose and taste of wine
+* Density: the density of wine is close to that of water depending on the 
+percent alcohol and sugar content
+* pH: describes how acidic or basic a wine is on a scale from 0 (very acidic) 
+to 14 (very basic); most wines are between 3-4 on the pH scale. Note the pH 
+scale is log10
+* Sulphates: a wine additive which can contribute to sulfur dioxide gas (S02) 
+levels, which acts as an antimicrobial and antioxidant
+* Alcohol: the percent alcohol content of the wine
+* Color: Red or White
+
+Output variable (based on sensory data):
+
+* Quality (score between 0 and 10) as a median of "at least 3 expert wine 
+tasters". This implies the scores are rounded averages of the individual 
+tasters scores and that the exact number of tasters for any given wine may vary.
+
+
+
+
+# Univariate Plots Section
+
+### Structure and Summary of data-sets
+
+A quick look at the structure and summary for the data-sets  
+
+Red Wines:  
+
+
+```{r str_sum_red, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/'}
+str(rw)
+summary(rw)
+```
+
+
+White Wines:  
+
+
+```{r  str_sum_white,echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,    cache.path = 'cache/', fig.path='figure/'}
+str(ww)
+summary(ww)
+```
+
+
+I notice for many for the variables the distance between the 3rd quartile 
+and the max is equal or greater compared to the distance from 3rd quartile 
+and the min. Outliers have a significant impact, yet cannot be ignored as 
+when taken in balance with other compounds they may impact the quality score
+
+Even controlling for color and quality I can see a lot within group and between 
+group variation of variables.  
+
+As the quality is likely driven by the interaction between variables and not one variable specifically, and given the massive difference in ranges both between variables and within variables standardizing the values in some way may prove 
+helpful in modeling the data for quality correlations at a later point in the 
+analysis.  
+
+Reds have a slightly lower mean quality than whites. 
+
+
+### Quick look at variable correlations
+
+While typically correlation analysis is done after other explorations and the 
+possible resulting data transformations / elimination of outliers I have elected 
+to do it here as well as later in this analysis as I am curious to see how the correlations might change as I manipulate the data.
+
+```{r CorR, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggcorr(rw[, 0:12], geom = "blank", label = TRUE, label_size = 4,
+               hjust = .9, layout.exp = 5) +
+  geom_point(size = 10, aes(color = coefficient > 0, 
+                            alpha = abs(coefficient) > 0.5)) +
+  scale_alpha_manual(values = c("TRUE" = 0.5, "FALSE" = 0)) +
+  guides(color = FALSE, alpha = FALSE)+
+  labs(title='Red Wine Component Correlations')
+
+
+```
+
+
+
+```{r CorW, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggcorr(ww[, 0:12], geom = "blank", label = TRUE, label_size = 4,
+               hjust = .9, layout.exp = 5) +
+  geom_point(size = 10, aes(color = coefficient > 0, 
+                            alpha = abs(coefficient) > 0.5)) +
+  scale_alpha_manual(values = c("TRUE" = 0.5, "FALSE" = 0)) +
+  guides(color = FALSE, alpha = FALSE)+
+  labs(title='White Wine Component Correlations')
+
+```
+
+
+
+When correlating with quality, no single component jumps out as having a strong positive or weak correlation. The correlations vary from red to white, which is 
+to be expected, given the requirements for producing quality in the 2 are 
+different and the white wine set contains a variety of sweet levels while the 
+red set is majority dry reds.  
+
+There are some strong correlations (above 0.5 or below -0.5) between variables. 
+
+* Citric acid has a strong positive correlation with fixed acidity in red wines 
+and pH has a strong negative correlation with fixed acidity. This is to be 
+expected as citric acid would add to the levels of acidity in wine and the lower 
+the pH level the higher the acidity. 
+* In red wines fixed acidity shows a surprisingly strong positive correlation 
+with density which appears marginal with white wines.
+* In white wines I notice a strong positive correlation between sugar and 
+density.
+    + This makes sense as sugar is dense compared to liquids and most of the 
+    other compounds and our white set has a much larger percentage of wines with 
+    higher sugar.        
+    + This trend is not as pronounced in red wines, probably because the red 
+    wine set has very few sweet wines and even then only mildly sweet.
+* Free and total sulfur correlates strongly as well. Given the former 
+contributes to the latter it is not surprising.
+* In white wines alcohol shows a strong negative correlation with density which 
+is not apparent with reds. Given there are more sweet white wines in the 
+data-sets, and given sugar increases density it is not surprising to see 
+alcohol's impact on density more pronounced in white wines.
+* What is surprising is sulfur dioxide's positive impact on density in white 
+wines while in reds its impact appears negligible.
+
+
+
+
+### Quantile distribution vs quality
+
+As mentioned earlier the difference between the 3rd quartile and the max is 
+often equal to or greater than the difference between the 3rd quartile and the 
+min for many variables.  
+
+I want to look at these relationships a little closer using a box plot for each
+independent variable or feature.
+
+
+#### Red Wines: Box plots exploring feature relationships with quality
+
+
+
+```{r bp_r_alc, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            alcohol), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Alcohol by Quality", 
+  x = "Quality", 
+  y = "Alcohol")+
+  theme(plot.title = element_text(size=11))
+```
+
+One immediately noticeable trend is the cluster of quality scores most heavily 
+between 5 and 6 with 4 and 7 having fewer and 3 and 8 having very few. This will
+hold true for the rest of the red wine plots so will not be mentioned again in 
+the following plots in this section.
+
+* The mean alcohol level seems to increase with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_r_sulp, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            sulphates), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Sulphates by Quality", 
+  x = "Quality", 
+  y = "Sulphates")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean for sulphates is more tightly distributed but does increase with 
+quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_r_ca, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,                cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            citric.acid), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Citric Acid by Quality", 
+  x = "Quality", 
+  y = "Citric Acid")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean citric acid level shows a slight increase with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_r_fa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            fixed.acidity), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Fixed Acidity by Quality", 
+  x = "Quality", 
+  y = "Fixed Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean fixed acidity level does not show a definitive trend
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and reinforcing that, taken alone, 
+this is not a strong indicator of quality.
+
+
+```{r bp_r_va, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            volatile.acidity), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Volatile Acidity by Quality", 
+  x = "Quality", 
+  y = "Volatile Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean volatile acidity level shows a definite decrease with quality. Given 
+volatile acidity is major factor in wine spoilage this is not surprising. 
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_r_rs, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            residual.sugar), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Residual Sugar by Quality", 
+  x = "Quality", 
+  y = "Residual Sugar")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sugar level shows a definite decrease with quality, for this data-set
+which consists of mostly dry red wines, this is not surprising. Higher sugar
+levels are generally unwanted in dry wines and can often indicate fermentation
+was stopped early. 
+* This relationship between sugar and alcohol merits further exploration which 
+will be performed later in this analysis
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_r_chl, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            chlorides), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Chlorides by Quality", 
+  x = "Quality", 
+  y = "Chorides (Salt)")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean Chloride (salt) level seems to decrease with quality, however the 
+means are still quite close.
+* There are a multitude of data points above and below the means that are not 
+outliers which are still tightly distributed compared to other feature 
+distributions.
+* Taken alone chlorides are still not a strong indicator of quality.
+
+
+```{r bp_r_pH, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            pH), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, pH by Quality", 
+  x = "Quality", 
+  y = "pH")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+
+* The mean pH level seems to decrease slightly with quality, though the trend is
+not pronounced. That said pH is a logarithmic scale so small deviations represent
+large variations in actual acidity levels. We will explore pH further in later 
+sections of this report
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_r_fso, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            free.sulfur.dioxide), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Free Sulfer Dioxide by Quality", 
+  x = "Quality", 
+  y = "Free Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sulfur dioxide level does not show any correlation with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_r_tsa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            total.sulfur.dioxide), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Total Sulfur Dioxide by Quality", 
+  x = "Quality",
+  y = "Total Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean total sulfur dioxide level does not show a clear correlation with
+quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_r_dens, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            density), 
+        data = rw) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Density by Quality", 
+  x = "Quality",
+  y = "Density")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean density level decreases with quality.
+* Alcohol and sugar both have an impact on density as do other compounds. A more detailed exploration of density drivers will be performed later in this report.
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+#### White Wines: Box plots exploring feature relationships with quality
+
+
+```{r bp_w_alc, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            alcohol), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Alcohol by Quality", 
+  x = "Quality", 
+  y = "Alcohol")+
+  theme(plot.title = element_text(size=11))
+```
+
+As with red wines one immediately noticeable trend is the cluster of quality 
+scores most heavily between 5 and 6 with 4 and 7 having fewer and 3, 8 and 9 
+having very few. This will hold true for the rest of the white wine plots so 
+will not be mentioned again in the following plots in this section.
+
+* The mean alcohol level increases with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_w_sulp, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            sulphates), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Sulphates by Quality", 
+  x = "Quality", 
+  y = "Sulphates")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sulphate level shows little correlation with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_w_ca, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,                cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            citric.acid), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Citric Acid by Quality", 
+  x = "Quality", 
+  y = "Citric Acid")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean citric acid level shows little correlation with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_w_fa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            fixed.acidity), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Fixed Acidity by Quality", 
+  x = "Quality", 
+  y = "Fixed Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean fixed acidity level shows a slight decrease with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_w_va, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            volatile.acidity), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Volatile Acidity by Quality", 
+  x = "Quality", 
+  y = "Volatile Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean volatile acidity level shows little correlation with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_w_rs, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            residual.sugar), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Residual Sugar by Quality", 
+  x = "Quality", 
+  y = "Residual Sugar")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sugar level shows little correlation with quality, although in this 
+data-set there are a wide range of sweetness (sugar) levels complicating things.
+* If I decide to retain all sweetness levels, which I may not do for reasons I 
+will detail later in this report, a more detailed exploration of sugar with
+relation to quality by sweetness level will be required.
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_w_chl, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            chlorides), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Chlorides by Quality", 
+  x = "Quality", 
+  y = "Chorides (Salt)")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean chloride level decreases with quality, however the distribution is
+very tight for the means
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_w_pH, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            pH), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, pH by Quality", 
+  x = "Quality", 
+  y = "pH")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean pH level shows a slight increase with quality. As noted with red wines,
+a slight change in pH indicates a large change in acidity.
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_w_fso, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            free.sulfur.dioxide), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Free Sulfer Dioxide by Quality", 
+  x = "Quality", 
+  y = "Free Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean free sulfur dioxide level shows little correlation with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_w_tsa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            total.sulfur.dioxide), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Total Sulfur Dioxide by Quality", 
+  x = "Quality",
+  y = "Total Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean total sulfur dioxide level shows a slight downward trend as quality
+increases
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_w_dens, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            density), 
+        data = ww) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color ="navy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Density by Quality", 
+  x = "Quality",
+  y = "Density")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean density level decreases with quality, though given sugar's impact on
+density and the wider range of sweet wines in the white data-set, this merits more detailed exploration if all levels of sweetness are retained throughout the
+analysis
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+#### Summation:
+These plots show the often large differences between the 4th quartile and 1st, 
+2nd and 3rd combined quite clearly as well as the large quantity of outliers.
+
+***
+
+#### Red Wines
+
+A trend is visible for Alcohol, Sulphates and Citric acid increasing as quality increases, and pH decreasing as quality increases. Sulphates and Citric acid 
+are additives to improve taste perception and pH is a measure of overall acidity 
+which, if too high leads to a "flat" taste. So none of this is surprising. 
+
+What is interesting is the variance in fixed acidity and sulfur dioxide 
+components and the downward trend in chlorides (salt) and volatile acidity. 
+These are outcomes of the fermentation process, meaning that the winemaker works 
+hard to control these variables during fermentation for example by the duration 
+of fermentation, by controlling temperature, during aging by choice of aging receptacles (age and type of barrels or stainless steel receptacles used for 
+aging) and using additives like sulphates, citric acid etc. to balance sulfur, 
+salt and volatile acids.  
+
+Residual Sugars don't provide a clear trend, there are a great many outliers 
+and as most of the wines in this set are Dry the impact of sugar 
+(only 1g-4g/dm^3^) would be expected to be more subtle for most of the wines 
+in this group.   
+
+***
+
+#### White Wines
+
+Again we see the trends for alcohol, and pH as having strong positive 
+correlations. 
+
+Sulphates impact is not as pronounced as it was with red. Chlorides still show a negative correlation with quality, with a lot of outliers. Sulfur and acidity 
+again show a lot of variance.
+
+Residual sugar is again not showing a clear trend, but in this case the set 
+includes wines across several sweetness levels so looking at sugar without 
+considering the sweetness level of the wines should not be expected to reveal
+much
+
+
+### Some additional comments
+
+* A lot more goes into a wines perceived quality than is accounted for in this 
+data-set.
+* Intended outcomes matter: for example if the vintner intended to produce a 
+sweet, low pH wine with subtle hints of oak and vanilla, or a sweet, low pH wine 
+with bright, sharp flavors the amounts and types of components desired in the 
+final product would be different, yet each wine could score equally high on the 
+quality rating
+* "Terroir": a French word that, when used in the context of wine, refers to how 
+a particular region's climate, soil, terrain, other flora (microbes, other 
+plants and trees) and wine-making traditions have a big yet often un-quantifiable 
+affect on a wines taste (for instance recent research suggests that microbes 
+might have a bigger impact than thought, at least in identifying where a wines 
+grapes were grown). 
+    + Hotter climates produce grapes with greater natural acidity than cooler 
+    climates and while there is as of yet no scientific basis that mineral 
+    content in the soil and bedrock influence a wines taste, subjectively there 
+    does seem to be a correlation as professional tasters will often cite 
+    differences in taste using words describing minerals, like graphite, 
+    gravely, limestone etc.
+* The age of the wine, the amount of oxidation, whether or not the wine was 
+made to be aged and when it was assessed for quality in relationship to it's 
+intended maturity can impact a quality score. For example, Beaujolais Nouveau 
+wine is intended to be consumed within months or even weeks of production, 
+while the average wine is intended to be consumed 2-5 years after production and 
+only a rare few wines are intended to be aged (reach maturity) beyond that. 
+Taste a wine too soon or too late and it's quality score would be negatively 
+impacted.
+* How the wine was aged before bottling: stainless steel tanks or wooden
+barrels, what type and source of wood (for example American oak vs French oak, 
+both impart different flavors and aromas to the wine), how often the barrels 
+have been used, if they have been re-fired etc. all feed into a wines taste and 
+odor and therefore its perceived quality.
+* The weather (temperature and rainfall) in the days and weeks leading up to 
+harvest can have a huge impact on the final outcome
+* Something as seemingly simple as the slope of the land the vineyard is planted 
+on can affect taste
+
+So my expectation is that when looking at only 11 compounds, many of which have 
+within and between group (multiple groups) relationships, a clear correlation of 
+the combinations of these components with quality may be difficult to discern 
+during an initial analysis and such a small data-set. In fact, the 11 compounds 
+found in this data-set can be mostly accounted for by just 5 groupings: acidity, density, sweetness ( but only in wines intended to be sweet), alcohol and 
+sulfur. 
+
+Alcohol and sweetness (sugar) both factor into density so you could further 
+reduce the compound groupings into sulfur, acidity and density. When considered 
+that way it becomes obvious that quality determination would be improbable with 
+the given variables
+
+Notable co-relationships would include pH with acidity, density with alcohol and 
+sugar (and possibly other components), sulphates and acidity (specifically 
+volatile acidity and especially in dry wines)
+
+Even determining relationships between components may have questionable 
+usefulness as the intended outcome the vintner has would have as much an impact 
+on how they treat and adjust the wines component balance. Meaning while 
+correlating a component or group of components with another would help the 
+vintner understand what is happening with the wine during production, their 
+desired outcome will determine how that information is used.
+
+Quality assessment is ultimately subjective, a matter of personal perception and preferences
+
+In short: I have doubts that the quality of a wine can be quantified by 
+measuring it's compounds, at least with as few variables as are provided by 
+these data-sets. However it may be possible to identify relationships between 
+components with the caveat that these relationships are not quality predictors 
+or even "if X then do Y" instructions but rather tools a vintner can use to 
+make decisions about how to treat a wine in relationship to their intended 
+outcome.
+
+Nonetheless I will continue looking at quality associations to see if the 
+data can provide some insights.
+
+***
+
+### Plotting the quality distributions by color
+
+```{r quality_by_color, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(data=ww, aes(x = quality))+
+  geom_histogram(binwidth = 1, color="black", fill="steelblue",
+                 aes(y =..count..))+
+  geom_vline(aes(xintercept=mean(quality, na.rm=F)),
+            color="black", linetype="dashed", size=1)+
+  labs(title="Red Wine Quality", x="Quality", y = "Count")
+
+
+ggplot(data=ww, aes(x = quality))+
+  geom_histogram(binwidth = 1, color="black", fill="steelblue",
+                 aes(y =..count..))+
+    geom_vline(aes(xintercept=mean(quality, na.rm=T)),
+            color="black", linetype="dashed", size=1)+
+   labs(title="White Wine Quality",x="Quality", y = "Count")
+
+```
+
+
+Zoom in: Plotting the quality distribution by color with breaks explicitly 
+stated in order to see the mean quality more clearly
+
+
+```{r quality_means, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(data=rw, aes(x = quality))+
+  geom_histogram(binwidth = 1, color="black", fill="steelblue",
+                 aes(y =..count..))+
+    scale_x_continuous(breaks= seq(3,9, by = .5))+
+  geom_vline(aes(xintercept=mean(quality, na.rm=F)),
+            color="black", linetype="dashed", size=1)+
+  labs(title="Red Wine Quality", x="Quality", y = "Count")
+
+
+ggplot(data=ww, aes(x = quality ))+
+  geom_histogram(binwidth = 1, color="black", fill="steelblue",
+                 aes(y =..count..))+
+  scale_x_continuous(breaks= seq(3, 9, by = .5))+
+    geom_vline(aes(xintercept=mean(quality, na.rm=T)),
+            color="black", linetype="dashed", size=1)+
+   labs(title="White Wine Quality",x="Quality", y = "Count")
+```
+
+
+Reds have a lower mean for quality score than white. I want to look at a 
+breakdown of the raw numbers for quality by color
+
+Reds:
+
+
+```{r table_red_quality, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+table(rw$quality)
+```
+
+
+Whites:
+
+
+```{r table_white_quality, echo=FALSE, message=FALSE, warning=FALSE,          cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+table(ww$quality)
+```
+
+
+For red the majority of quality scores are clustered between 5 and 7. Quality 
+scores 3 and 8 have few enough scores to be considered outliers. 4 can possibly 
+be considered an outlier as well as its value is approximately 1/4 that of 7 
+and an order of magnitude lower than 5 and 6.
+
+For whites we see much of the same, my initial feeling is that scores 5,6 and 7 
+are the only scores that have enough values to really analyze with confidence.
+
+
+### Plotting the sweetness by color
+
+
+```{r Sweet_by_Color, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+s1 <- ggplot(data=rw, aes(x = sweet, fill = sweet))+
+  geom_histogram(stat='count')+
+  labs(title="Red Wine Sweetness", x="Sweetness", y = "Count")
+
+
+s2 <- ggplot(data=ww, aes(x = sweet,  fill = sweet ))+
+  geom_histogram(stat='count')+
+   labs(title="White Wine Sweetness",x="Sweetness", y = "Count")
+
+grid.arrange(s1,s2, ncol = 1)
+
+```
+
+
+The majority of the Reds are Dry while Whites have more variation between 
+levels of sweetness. Note that sweetness is not a linear value. Dry ranges 
+from 0-4, medium dry from 4-12, medium from 12-45 and sweet above 45 grams of
+sugar per liter. 
+
+Let's look at sugar levels as there are big differences in the amounts of 
+sugar within sweetness levels.
+
+```{r color_sugar, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+rs1 <- ggplot(data=rw, aes(x = residual.sugar, fill = sweet))+
+  geom_histogram(bins = 20)+
+  labs(title="Red Wine Residual Sugar g/l", x="Grams of Sugar/ Liter", 
+       y = "Count")
+
+
+rs2 <- ggplot(data=ww, aes(x = residual.sugar, fill = sweet))+
+  geom_histogram(bins = 20)+
+   labs(title="White Wine Residual Sugar g/l",x="Grams of Sugar/ Liter", 
+        y = "Count")
+
+
+grid.arrange(rs1,rs2, ncol = 1 )
+```
+
+
+Let's look at the same data as boxplots:
+
+
+
+```{r bpcolor_sugar, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+rsbp1 <- ggplot(data=rw, aes(x = factor(sweet), 
+                           y =residual.sugar ))+
+ geom_boxplot( alpha = .5,color = 'blue')+
+  labs(title="Red Wine Residual Sugar g/l", x="Grams of Sugar/ Liter", 
+       y = "Sugar Levels")
+
+
+rsbp2 <- ggplot(data=ww, aes(x = factor(sweet), 
+                           y =residual.sugar ))+
+  geom_boxplot( alpha = .5,color = 'blue')+
+   labs(title="White Wine Residual Sugar g/l",x="Grams of Sugar/ Liter", 
+        y = "Sugar Levels")
+
+
+grid.arrange(rsbp1,rsbp2, ncol = 1 )
+```
+
+
+For whites we cannot clearly see the sugar at higher levels as there are so few, 
+so lets zoom in to the high end of the graph looking at higher sugar levels.
+
+
+```{r zoom_white_sugar, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ ggplot(data=ww, aes(x = residual.sugar, fill = sweet))+
+  geom_histogram(binwidth = 1)+
+   labs(title="Sweeter White Wine Residual Sugar g/l",x="Grams of Sugar/ Liter", 
+        y = "Count")+
+  ylim(0, 25)
+
+```
+
+
+
+Let's zoom in on sugar without the outliers.
+
+
+
+```{r zoom_color_sugar, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+rsz1 <- ggplot(data=rw, aes(x = residual.sugar, fill = sweet))+
+  scale_x_continuous(limits = c(min(rw$residual.sugar[rw$residual.sugar >= 0]), quantile(rw$residual.sugar, 0.98)))+
+  geom_histogram(binwidth = 1)+
+  labs(title="Red Wine Residual Sugar g/l", x="Grams of Sugar/ Liter", 
+       y = "Count")
+
+
+rsz2 <- ggplot(data=ww, aes(x = residual.sugar, fill = sweet))+
+  geom_histogram(binwidth = 1)+
+  scale_x_continuous(limits = c(min(ww$residual.sugar[ww$residual.sugar >= 0]), quantile(ww$residual.sugar, 0.98)))+
+   labs(title="White Wine Residual Sugar g/l",x="Grams of Sugar/ Liter", 
+        y = "Count")
+
+
+grid.arrange(rsz1,rsz2, ncol = 1 )
+```
+
+
+And again as boxplots:
+
+
+
+```{r bpzoom_color_sugar, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+rszbp1 <- ggplot(data=rw, aes(x = factor(sweet), 
+                           y =residual.sugar ))+
+  scale_y_continuous(limits = c(min(rw$residual.sugar[rw$residual.sugar >= 0]), quantile(rw$residual.sugar, 0.98)))+
+ geom_boxplot( alpha = .5,color = 'blue')+
+  labs(title="Red Wine Residual Sugar g/l", x="Grams of Sugar/ Liter", 
+       y = "Sugar Levels")
+
+
+rszbp2 <- ggplot(data=ww, aes(x = factor(sweet), 
+                           y =residual.sugar ))+
+  scale_y_continuous(limits = c(min(ww$residual.sugar[ww$residual.sugar >= 0]), quantile(ww$residual.sugar, 0.98)))+
+ geom_boxplot( alpha = .5,color = 'blue')+
+   labs(title="White Wine Residual Sugar g/l",x="Grams of Sugar/ Liter", 
+        y = "Sugar Levels")
+
+
+grid.arrange(rszbp1,rszbp2, ncol = 1 )
+```
+
+We can more clearly see that the residual sugar levels vary greatly from red to 
+white wines with white wines having a greater percentage of wines in the sweeter categories. Reds are mostly Dry(4g/l of sugar or less)  while Whites have 
+variation from dry to sweet, the actual amounts of sugar mostly max out at the 
+lower end of the medium sweet level with a few outliers into the very sweet.
+
+Once outliers are removed we can see The sweetest level of white wines (Sweet) 
+and red wines (Medium) are completely removed from the plot
+
+I want to look closer at sweetness by color
+
+
+Red Wines
+
+
+```{r red_sweet, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+table(rw$sweet)
+```
+
+
+White Wines
+
+
+```{r white_sweet, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+table(ww$sweet)
+```
+
+
+Here it is quite clear that reds are dominated by Dry wines with 92% of them 
+Dry while whites are a little better distributed with 42% Dry, 40% Medium Dry 
+and 16% Medium Dry.
+
+
+### Alcohol content
+
+
+```{r alcohol_color,echo=FALSE, message=FALSE, warning=FALSE,  cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+
+al1 <- ggplot(data=rw, aes(x = alcohol ))+
+  geom_histogram(bins=30, color= "black", fill="steelblue")+
+  labs(title="Red Wine Alcohol %", x="Alcohol %", y = "Count")+
+  scale_x_continuous(breaks=seq(8, 15, by =.5))
+
+
+al2 <- ggplot(data=ww, aes(x = alcohol))+
+  geom_histogram(bins=30, color= "black", fill="steelblue")+
+  labs(title="White Wine Alcohol %",x="Alcohol %", y = "Count")+
+  scale_x_continuous(breaks=seq(8, 15, by =.5))
+
+
+grid.arrange(al1,al2, ncol = 1 )
+```
+
+
+
+```{r alcohol_color_denisty_means,echo=FALSE, message=FALSE, warning=FALSE,  cache=TRUE,cache.path = 'cache/', fig.path='figure/'}
+alc1 <- ggplot(data=rw, aes(x = alcohol ))+
+  geom_histogram(bins=30, color= "black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(alcohol, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="Red Wine Alcohol % Mean", x="Alcohol %", 
+       y = "Probability Density")+
+  scale_x_continuous(breaks=seq(8, 15, by =.5))
+
+
+alc2 <- ggplot(data=ww, aes(x = alcohol))+
+  geom_histogram(bins=30, color= "black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(alcohol, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="White Wine Alcohol % Mean",x="Alcohol %", 
+       y = "Probability Density")+
+  scale_x_continuous(breaks=seq(8, 15, by =.5))
+
+
+grid.arrange(alc1,alc2, ncol = 1 )
+```
+
+***
+
+Alcohol is more widely distributed in white's than red's but the mean values
+are quite close.
+
+Zooming in on alcohol content excluding outliers:
+
+***
+
+```{r alcohol_zoomed, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+alcz1 <- ggplot(data=rw, aes(x = alcohol ))+
+  geom_histogram(bins=30, color= "black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(alcohol, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="Red Wine Alcohol % Mean", x="Alcohol %", 
+       y = "Probability Density")+
+  scale_x_continuous(limits = 
+                        c(min(rw$alcohol[rw$alcohol >= 9]),
+                          quantile(rw$alcohol, 0.98)))
+
+
+alcz2 <- ggplot(data=ww, aes(x = alcohol))+
+  geom_histogram(bins=30, color= "black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(alcohol, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="White Wine Alcohol % Mean",x="Alcohol %", 
+       y = "Probability Density")+
+  scale_x_continuous(limits = 
+                        c(min(ww$alcohol[ww$alcohol >= 9]),
+                          quantile(ww$alcohol, 0.98)))
+
+
+grid.arrange(alcz1, alcz2, ncol = 1 )
+```
+
+
+Looking at these plots it's clearer that red and white wines alcohol 
+distribution is quite similar with very close means.
+
+Looking at alcohol outliers by comparing histograms to boxplots:
+
+```{r h_bp_alc_out, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+
+alout1 <-ggplot(aes(x=alcohol), 
+        data = rw) +
+  geom_histogram( bins = 30, color="black", fill="steelblue")+
+  labs(title="Red Wine Alcohol % ",x="Alcohol %", 
+       y = "Count")
+
+alout2 <- ggplot(aes(x=1, y=alcohol), 
+        data = rw) +
+  geom_boxplot( )+
+  labs(title="Red Wine Alcohol % ",x="1", 
+       y = "Alcohol %")
+
+
+alout3 <- ggplot(aes(x=alcohol), 
+        data = ww) +
+  geom_histogram( bins = 30, color="black", fill="steelblue")+
+  labs(title="White Wine Alcohol % ",x="Alcohol %", 
+       y = "Alcohol %")
+
+alout4 <- ggplot(aes(x=1, y=alcohol), 
+        data = ww) +
+  geom_boxplot( )+
+  labs(title="White Wine Alcohol % ",x="1", 
+       y = "Alcohol %")
+
+grid.arrange(alout1, alout2, alout3, alout4, nrow =2)
+```
+
+There are more outliers for red wines than whites, probably due to the fact that 
+the white wine collection is approximately three times the size of the red wines collection.
+
+
+### Looking at sulphates:
+
+
+```{r sulphates_color, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+sp1 <- ggplot(data=rw, aes(x = sulphates ))+
+  geom_histogram(bins=30, color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(sulphates, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="Red Wine Sulphates", x="Sulphates", 
+       y = "Probability Density")+
+  scale_x_continuous(breaks=seq(.3, 2.0, by =.1))
+
+
+sp2 <- ggplot(data=ww, aes(x = sulphates))+
+  geom_histogram(bins=30, color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(sulphates, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="White Wine Sulphates",x="Sulphates", 
+       y = "Probability Density")+
+  scale_x_continuous(breaks=seq(.3, 2.0, by =.1))
+
+
+grid.arrange(sp1,sp2, ncol = 1 )
+```
+
+
+
+Zooming in to exclude outliers:
+
+
+
+```{r sulphates_zoom_color,echo=FALSE, message=FALSE, warning=FALSE,          cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+spz1 <- ggplot(data=rw, aes(x = sulphates ))+
+  geom_histogram(bins=30,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(sulphates, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="Red Wine Sulphates", x="Sulphates", 
+       y = "Probability Density")+
+  scale_x_continuous(limits = 
+                        c(min(rw$sulphates[rw$sulphates >= 0.35]),
+                          quantile(rw$sulphates, 0.98)))
+
+
+spz2 <- ggplot(data=ww, aes(x = sulphates))+
+  geom_histogram(bins=30,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(sulphates, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="White Wine Sulphates",x="Sulphates", 
+       y = "Probability Density")+
+  scale_x_continuous(limits = 
+                        c(min(ww$sulphates[ww$sulphates >= 0.35]),
+                          quantile(ww$sulphates, 0.98)))
+
+
+grid.arrange(spz1,spz2, ncol = 1 )
+```
+
+The mean and max sulphates for whites is lower than for reds and more tightly distributed. Once outliers are excluded the difference in distribution, mean 
+amount and total amounts of sulphates are quite vivid.
+
+### Looking at pH levels:
+
+
+```{r pH_by_color_means_density, echo=FALSE, message=FALSE, warning=FALSE,   cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+ph1 <- ggplot(data=rw, aes(x = pH ))+
+  geom_histogram(bins=10,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(pH, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="Red Wine pH", x="pH", y = "Probability Density")+
+  scale_x_continuous(breaks=seq(2, 4, by =.1))
+
+
+ph2 <- ggplot(data=ww, aes(x = pH))+
+  geom_histogram(bins=10,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(pH, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="White Wine pH",x="pH", y = "Probability Density")+
+  scale_x_continuous(breaks=seq(2, 4, by =.1))
+
+
+grid.arrange(ph1,ph2, ncol = 1 )
+```
+
+
+Red pH Mean
+
+
+```{r mean_red_pH, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,       cache.path = 'cache/', fig.path='figure/'}
+mean(rw$pH)
+```
+
+
+White pH Mean
+
+
+```{r mean_white_pH, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,    cache.path = 'cache/', fig.path='figure/'}
+mean(ww$pH)
+```
+
+
+pH is a __logarithmic__ scale. A pH of 3 is 10x as acidic as a pH of 4. The 
+means appear quite close as do the distributions. However, a mean pH of 3.31 
+for reds and 3.19 for whites tells us that the mean acidity for white wines 
+is actually about _twice_ as acidic as reds.
+
+Let's zoom in so we can see how much distance there really is between the 2 means.
+
+
+```{r pH_zoom, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+zoomphR <- subset(rw, rw$pH >=3.18 & rw$pH <= 3.32)
+phlog1 <- ggplot(data=zoomphR, aes(x = pH ))+
+  geom_histogram(bins=15,  color="black", fill="steelblue")+
+  geom_vline(xintercept = 3.311113, color="red", linetype="longdash", size=1)+
+  labs(title="Red Wine pH", x="pH", y = "Count")+
+  scale_x_continuous(breaks=seq(3.1, 3.32, by =.02))
+
+
+zoomphW <- subset(ww, ww$pH >=3.18 & ww$pH <= 3.32)
+phlog2 <- ggplot(data= zoomphW, aes(x = pH))+
+  geom_histogram(bins=15,  color="black", fill="steelblue")+
+  geom_vline(xintercept = 3.188267, color="red", linetype="longdash", size=1)+
+  labs(title="White Wine pH",x="pH", y = "Count")+
+  scale_x_continuous(breaks=seq(3.1, 3.32, by =.02))
+
+grid.arrange(phlog1,phlog2, ncol = 1 )
+```
+
+
+Now it becomes quite clear just how far apart the mean pH level is for red and 
+white wines.
+
+
+### Looking at densities:
+
+
+```{r density_by_color_means_and_prob_density, echo=FALSE, message=FALSE, warning=FALSE,  cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+d1 <- ggplot(data=rw, aes(x = density ))+
+  geom_histogram(bins=20,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(density, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="Red Wine Density", x="Density", y = "Probability Density")+
+  scale_x_continuous(breaks=seq(.9, 1.05, by =.01))
+
+
+d2 <- ggplot(data=ww, aes(x = density))+
+  geom_histogram(bins=20,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(density, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="White Wine Density",x="Density", y = "Probability Density")+
+  scale_x_continuous(breaks=seq(.9, 1.05, by =.01))
+
+
+grid.arrange(d1,d2, ncol = 1 )
+
+```
+
+Density with white wines tends to start higher and peak higher than reds, though 
+means are similar. Reds are more evenly distributed,, probably because the set 
+of red wines are mostly dry while whites are of varying levels of sweetness. 
+As sugar affects density it is hard to see the higher densities in white wines 
+in this graph, let's zoom in and focus on the higher densities
+
+
+```{r zoomed_densities, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/'}
+ggplot(data=ww, aes(x = density))+
+  geom_histogram(binwidth = .001,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  labs(title="White Wine Density",x="Density", y = "Count")+
+  scale_x_continuous(breaks=seq(.9, 1.05, by =.01))+
+  ylim(0,40)
+```
+
+We can now see that there are some higher density white wines, but only a few.
+
+
+Zooming in on densities, removing outliers
+
+```{r density_zoom, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/'}
+dz1 <- ggplot(data=rw, aes(x = density ))+
+  geom_histogram(bins=15,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  labs(title="Red Wine Density", x="Density", y = "Probability Density")+
+ scale_x_continuous(limits = 
+                        c(min(rw$density[rw$density >= 0.993]),
+                          quantile(rw$density, 0.95)))
+
+
+dz2 <- ggplot(data=ww, aes(x = density))+
+  geom_histogram(bins=15,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  labs(title="White Wine Density",x="Density", y = "Probability Density")+
+  scale_x_continuous(limits = 
+                        c(min(ww$density[ww$density >= 0.993]),
+                          quantile(ww$density, 0.95)))
+
+
+grid.arrange(dz1,dz2, ncol = 1)
+
+```
+
+Red wines have a more normal distribution while white wines tend to be more 
+evenly distributed.
+
+
+### Looking at citric acid:
+
+```{r citric_acid_and_color, echo=FALSE, message=FALSE, warning=FALSE,       cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+c1 <- ggplot(data=rw, aes(x = citric.acid ))+
+  geom_histogram(bins=30,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(citric.acid, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="Red Wine Citric Acid", x="Citric Acid", 
+       y = "Probability Density")+
+  scale_x_continuous(breaks=seq(0, 1.25, by =.1))
+ 
+
+
+c2 <- ggplot(data=ww, aes(x = citric.acid))+
+  geom_histogram(bins=30,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  geom_vline(aes(xintercept=mean(citric.acid, na.rm=T)),
+              color="red", linetype="dashed", size=1)+
+  labs(title="White Wine Citric Acid",x="Citric Acid", 
+       y = "Probability Density")+
+  scale_x_continuous(breaks=seq(0, 1.25, by =.1))
+ 
+
+
+grid.arrange(c1,c2, ncol = 1 )
+
+```
+
+
+The mean citric acid for red wines
+
+
+```{r mean_red_c_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/'}
+mean(rw$citric.acid)
+```
+
+
+The mean citric acid for white wines
+
+
+```{r mean_white_c_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/'}
+mean(ww$citric.acid)
+```
+
+
+The means of citric acid are quite close, ~0.5 apart. However, the distribution 
+is quite different with more reds having 0 or almost 0 citric acid added. For 
+white we see a more normal distribution.
+
+This becomes more apparent when we remove outliers below:
+
+```{r citric_zoom, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/'}
+cz1 <- ggplot(data=rw, aes(x = citric.acid ))+
+  geom_histogram(bins=20,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  labs(title="Red Wine Citric Acid", x="Citric Acid", 
+       y = "Probability Density")+
+   scale_x_continuous(limits = 
+                        c(min(rw$citric.acid[rw$citric.acid >= 0.0]),
+                          quantile(rw$citric.acid, 0.98)))
+
+
+cz2 <- ggplot(data=ww, aes(x = citric.acid))+
+  geom_histogram(bins=20,  color="black", fill="steelblue",
+                 aes(y =..density..))+
+  geom_density(col=2) +
+  labs(title="White Wine Citric Acid",x="Citric Acid", 
+       y = "Probability Density")+
+   scale_x_continuous(limits = 
+                        c(min(ww$citric.acid[ww$citric.acid >= 0.0]),
+                          quantile(ww$citric.acid, 0.98)))
+
+
+grid.arrange(cz1,cz2, ncol = 1 )
+
+```
+
+
+Here we can see the distribution for white wines is fairly normal while it is 
+fairly evenly distributed for reds.
+
+
+
+##### Goals for analysis
+
+My goals for this analysis are:
+
+* To get some insights into which variables have correlations with each other 
+and get an initial idea of what those correlations are telling us
+* To get some insights into what variables might be used as strong correlation 
+signals for quality to allow me to attempt to create a predictive model. To 
+achieve this it requires I have enough data for each category I will be 
+predicting for.
+
+
+### Outliers
+
+2 main variables are worrisome regarding outliers, quality scores and sweetness 
+levels.
+
+Looking at summaries for quality scores:
+
+Red Wines:
+
+```{r red_quality_sum, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+summary(rw$quality)
+```
+
+
+White Wines:
+
+
+```{r white_quality_sum, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+summary(ww$quality)
+```
+
+
+Using the Upper/Lower Fence method of identifying outliers:
+
+* Calculate the Interquartile Range: IQR = Q3 - Q1
+* Calculate the Upper Fence = Q3 + 1.5 * IQR
+* Calculate the Lower Fence = Q1 - 1.5 * IQR
+
+For both red and white wines:
+
+ * IQR = 6 - 5 = 1
+ * Upper fence = 6 + (1.5 * 1) = 7.5
+ * Lower Fence = 5 - (1.5 * 1) = 3.5
+ * Rounding down for upper fence and up for lower gives us a range of 4 - 7
+ * Rounding up for both gives us a range of 4 - 8
+ 
+ But, looking at the numbers:
+ 
+ 
+ Red Wines:
+ 
+ 
+```{r red_quality_str, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+table(rw$quality)
+```
+
+
+White Wines:
+
+
+```{r white_quality_str, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+table(ww$quality)
+```
+ 
+Determining outliers is not an exact science so there is no “one” definition as 
+to what defines an outlier. To an extent it is a judgement call.
+
+Looking at the numbers for red and white wines: less than 2% of wines fall into 
+categories 3,8 or 9 for red and less than 1% for white.
+
+If we exclude quality scores for 4 as well it removes just over 5% of the data 
+for reds and 7.5% for whites.
+
+Given that I will keep quality scores 4 - 7 discarding 3, 8 and 9
+
+Looking at sweetness levels next
+
+Red:
+
+```{r red_sweet_sum, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+summary(rw$sweet)
+```
+
+
+White:
+
+
+```{r white_sweet_sum, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+summary(ww$sweet)
+```
+
+
+For both Red and White it is immediately obvious that the highest level of sweet: 
+"Sweet" won't help with analysis as Reds have none and whites only 1.
+
+The next highest category of sweetness: " Medium" accounts for only ~ 0.5% of
+red wines, but does account for almost 17% of whites. 
+
+Considering this closer it is worth noting the massive gap in sugar amounts for 
+the different levels of sweetness:
+
+* Dry 4 g / dm^3^ or less
+* Medium Dry between 4 and 12 g / dm^3^
+* Medium between 12 and 45 g / dm^3^
+* Sweet over 45 g / dm^3^
+
+Using the Upper/Lower Fence boundaries to determine outliers again:
+
+IQR ranges for reds:
+
+```{r red_sugar_iqr, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+summary(rw$residual.sugar)
+```
+
+And whites:
+
+```{r white_sugar_iqr, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,        cache.path = 'cache/', fig.path='figure/' }
+summary(ww$residual.sugar)
+```
+
+* Calculate the Interquartile Range: IQR = Q3 - Q1
+* Calculate the Upper Fence = Q3 + 1.5 * IQR
+* Calculate the Lower Fence = Q1 - 1.5 * IQR
+
+For red wines:
+
+ * IQR = 2.6 - 1.9 = 0.7
+ * Upper fence = 2.6  + (1.5 * 0.7) = 3.65
+ * Lower Fence = 1.9 - (1.5 * 0.7) = 0.85
+ 
+ For white wines:
+ 
+ * IQR = 9.9 - 1.7 = 8.2
+ * Upper fence = 9.9  + (1.5 * 8.2) = 22.2
+ * Lower Fence = 1.7 - (1.5 * 8.2) = -10.6
+ 
+ 
+Using the fencing method for red wines it is quite clear that only Dry wines are
+worth considering, but this method does not work as well for whites as it produces
+a negative number for the lower fence. 
+
+In the interest of comparing like to like I will drop all sweet wines and keep
+only dry wines for both red and wines. 
+
+So this analysis will only consider dry wines with quality scores between 4 and 
+7. I will re-number these scores to be 1-4 (4 = 1, 5 = 2, 6 = 3, and 7 = 4)
+
+
+```{r create_new_dataframes, echo=FALSE, message=FALSE, warning=FALSE,       cache=TRUE, cache.path = 'cache/', fig.path='figure/' }
+# creating new dataframes containing only the values we are looking for
+
+# first red wines: drop everything except Dry
+
+redDry <- subset(rw, rw$sweet == 'Dry')
+
+# as we are only using Dry we can drop the sweet column
+
+redDry <- subset(redDry, select= -sweet)
+
+# now eliminate quality scores below 4 and above 7
+
+redDry <- subset(redDry, redDry$quality > 3 & redDry$quality < 8)
+
+# simplify quality by changing it from 5,6,7 to 1,2,3
+
+redDry$quality[redDry$quality == 4 ] <- 1
+redDry$quality[redDry$quality == 5 ] <- 2
+redDry$quality[redDry$quality == 6 ] <- 3
+redDry$quality[redDry$quality == 7 ] <- 4
+
+# Now for white wines
+
+# drop everything except Dry
+
+whiteDry <- subset(ww, ww$sweet == 'Dry')
+
+# as we are only using Dry we can drop the sweet column
+
+whiteDry <- subset(whiteDry, select= -sweet)
+
+# now eliminate quality scores below 4 and above 7
+
+whiteDry <- subset(whiteDry, whiteDry$quality > 3 & whiteDry$quality < 8)
+
+# simplify quality by changing it from 5,6,7 to 1,2,3
+
+whiteDry$quality[whiteDry$quality == 4 ] <- 1
+whiteDry$quality[whiteDry$quality == 5 ] <- 2
+whiteDry$quality[whiteDry$quality == 6 ] <- 3
+whiteDry$quality[whiteDry$quality == 7 ] <- 4
+
+```
+
+I have modified the data and now have 2 data-sets with 11 independent variables 
+(the components of the wines) and one dependent variable (the quality score). 
+
+The final data sets are: redDry and whiteDry. 
+
+The wine data is now divided by color and simplified to just one level of 
+sweetness: Dry with quality simplified 1,2,3, 4 instead of 4, 5,6,7 and outlier 
+values removed. So essentially I am really only looking at mid range wines. This 
+may prove a poor decision as it may hide quality signals for lower and higher 
+quality wines, but given the low number of them I have decided to give it a go 
+this way and see what develops. To properly analyze the higher and lower 
+qualities of wine I feel I would need sample sizes larger than provided in this data-set to be considered representative.
+
+I also removed the column for sweetness as it is no longer needed given that the sweetness level is now only Dry for both data-sets.
+
+### Revisiting Correlation Analysis With the New Data-Sets
+
+```{r CorRD, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggcorr(redDry[, 0:12], geom = "blank", label = TRUE, label_size = 4,
+               hjust = .9, layout.exp = 5) +
+  geom_point(size = 10, aes(color = coefficient > 0, 
+                            alpha = abs(coefficient) > 0.5)) +
+  scale_alpha_manual(values = c("TRUE" = 0.5, "FALSE" = 0)) +
+  guides(color = FALSE, alpha = FALSE)+
+  labs(title='Red Wine Component Correlations')
+
+
+```
+
+
+
+```{r CorWD, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggcorr(whiteDry[, 0:12], geom = "blank", label = TRUE, label_size = 4,
+               hjust = .9, layout.exp = 5) +
+  geom_point(size = 10, aes(color = coefficient > 0, 
+                            alpha = abs(coefficient) > 0.5)) +
+  scale_alpha_manual(values = c("TRUE" = 0.5, "FALSE" = 0)) +
+  guides(color = FALSE, alpha = FALSE)+
+  labs(title='White Wine Component Correlations')
+
+```
+
+
+### Correlation Changes Between Old and New Data-sets
+
+Red Wines:
+
+* Alcohol exhibits a stronger negative correlation with density now that we are
+only looking at Dry wines. This is not surprising as eliminating sweeter wines
+minimizes sugar's impact on density.
+* There were no other note-worthy changes
+
+White Wines:
+
+* Interestingly alcohol's correlation to density remains virtually unchanged. 
+This is surprising as there were far more sweeter white wines than there were 
+for reds so I would have expected the impact to be more pronounced, not less.
+* Total Sulfur's positive correlation with density has significantly decreased, 
+again a surprising effect of removing sweeter wines and quality outliers.
+* Least surprising, sugar's impact on density is almost entirely negated now 
+that we have removed sweeter wines from the data-set
+*There were no other noteworthy changes.
+
+
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+There are 2 data sets, Red Dry Wines with 1450 observations and White Dry with 
+2005 observations, and 1 dependent variable for both (quality).
+
+The Independent variables are: "fixed.acidity", "volatile.acidity", "citric.acid","residual.sugar", "chlorides","free.sulfur.dioxide", "total.sulfur.dioxide","density", "pH", "sulphates", "alcohol"
+
+There is a lot of interaction between these variables, often times subtle, 
+driving quality scores
+
+I also added a variable: sweet with levels Dry, Medium Dry, Medium, and Sweet. 
+Which I then used to subset into the data frames indicated above. Once 
+completed I removed the variable as the sweetness level is implicit to the 
+data-set containing it.
+
+I dropped outliers. For both red and white I dropped all scores less than 4 or 
+greater than 7 as there were to few observations of each dropped level. I then flattened the quality scores from 4, 5, 6 and 7 to 1, 2 3, and 4 for 
+simplicity's 
+sake.
+
+I dropped all sweetness levels except for Dry.
+
+Further initial observations:
+
+* Most wines in the original data-sets, when color is not considered, are dry
+* White wines have a much higher percentage of sweeter (medium dry and higher)
+wines than red. 
+* The mean quality is approximately 5.8 with the minimum at 3 and the maximum 
+at 9 on a scale of 1-10
+* There are very large variations in concentrations of the compounds being 
+analyzed both within and between variables even when means are close.
+* As the flavor and therefore the quality of wines are impacted by the interplay
+between these compounds it was not surprising to find that no one variable had 
+a high correlation with quality
+* Consider adding the same amount of mg of pepper or sugar to something. You 
+can add a tiny amount of pepper to something and have a huge increase in 
+spiciness, while adding the same amount of sugar would have a negligible 
+affect on the level of sweetness. 
+    + Likewise the amount of one compound in relation to another can have a 
+    huge impact. Consider lemonade. Depending on the tartness or sourness of 
+    it you may need to add more or less sugar to make it enjoyable, for your 
+    personal preferences.
+* It is worth noting that the wines were assessed for quality by a median of 
+at "least" 3 wine experts
+    + implying that in some cases any given wine may have had more than 3 
+    reviews. 
+    + This also implies the reviews are averaged and rounded to the nearest 
+    whole number and adds some uncertainty to the quality scores as a wine with 
+    10 reviewers could be considered to have a more accurate score due to a 
+    higher consensus amongst reviewers. It also implies that in some cases a 
+    wine may have been reviewed by only 1 or 2 reviewers. 
+    + I consider this to be a major flaw with this data-set.
+* Other flaws with the data-sets include:
+    + The skewed sweetness distributions, weighted heavily towards dry 
+    + The skewed quality distributions having outliers 3,,8 and 9 when 
+    compared to the frequency of 4, 5, 6 and 7 scores. 
+    + This tendency of scores to cluster between 4 and 7 (especially 5 and 7) 
+    could be a product of  the number of reviewers. As taste is subjective 
+    it is not unlikely to think that one taster may love  a wine, scoring it 
+    high,  while another hates it, scoring it low. Wines with more tasters 
+    would tend to average out the love/hate driving the scores to the center. 
+    As the number of tasters and their individual quality score for each 
+    individual wine is not provided this is an un-testable hypothesis, but 
+    intriguing nonetheless. It could also be simply that most wines produced are 
+    of middle average quality.
+* As mentioned in my previous point taste (quality in this data-set) is highly subjective, again using the lemonade example, the ideal balance of sweet vs 
+sour will vary from person to person.
+
+### What is/are the main feature(s) of interest in your dataset?
+
+I think all the variables will have an impact. Standardizing the variables may 
+be needed to do a proper analysis of impact on quality. 
+
+Aside from that I believe different amounts of each compound will be needed to 
+arrive at a good quality score depending on the color of the wine.
+
+The interplay between acidity, pH and sulfur/sulphates might prove interesting 
+as acidity and pH are directly related, lower pH = higher acidity. Sulfur is 
+used in wine to counter balance volatile acids (the acids that give the vinegar 
+taste and smell). Sugar might also factor into pH and therefore overall acidity 
+levels as sugar is high pH (7 or neutral: neither acidic nor base) and therefore 
+could reasonably be expected to increase density and reduce acidity.
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+
+Color (more specifically the type of grape(s) used) is an important factor 
+related to the ideal balance of the rest of the variables in relation to quality. 
+Unfortunately while I am given color I am not given the grape varietals, so color 
+will have to do. 
+
+Generally, however, people expect different things out of red vs white wines, 
+so I expect to see differences in the "tolerance" levels for each color for the 
+various compounds provided as variables for the wines in relation to quality.
+
+
+### Did you create any new variables from existing variables in the dataset?
+
+Yes, I created the variable sweet with 4 levels: Dry, Medium Dry, Medium, Sweet. 
+I then used that to subdivide my data into 2 groups based on color and 
+sweetness. In the end I decided to only maintain Dry wines.
+
+Once that was completed I removed the sweet column as it was no 
+longer needed
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+I noticed that for many of the compounds the difference between the 3rd Quartile 
+and the max was often equal to or greater than the difference between the 3rd 
+quartile and the minimum.
+
+I created new data frames for each color, retaining only Dry wines and quality 
+scores 4-7 which I re-numbered as 1-4.
+
+# Bivariate Plots Section
+
+### Most Highly Correlated
+
+Before I carry forward, I want to  take a quick look at what factors are most correlated with each other for all wine sets. Specifically I will look at the 
+top 10 correlations
+
+
+```{r create_new_cor_fun, echo=FALSE, message=FALSE, warning=FALSE,          cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+
+mosthighlycorrelated <- function(mydataframe,numtoreport)
+# citation:
+#http://little-book-of-r-for-multivariate-analysis.readthedocs.io/en/latest/src/multivariateanalysis.html as source for this code
+  {
+     # find the correlations
+     cormatrix <- cor(mydataframe)
+     # set the correlations on the diagonal or lower triangle to zero,
+     # so they will not be reported as the highest ones:
+     diag(cormatrix) <- 0
+     cormatrix[lower.tri(cormatrix)] <- 0
+     # flatten the matrix into a dataframe for easy sorting
+     fm <- as.data.frame(as.table(cormatrix))
+     # assign human-friendly names
+     names(fm) <- c("First.Variable", "Second.Variable","Correlation")
+     # sort and print the top n correlations
+     head(fm[order(abs(fm$Correlation),decreasing=T),],n=numtoreport)
+}
+```
+
+
+Red Dry Wines:
+
+
+```{r cor_red, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,          cache.path = 'cache/', fig.path='figure/'}
+mosthighlycorrelated(redDry[1:12], 10)
+```
+
+
+White Dry Wines
+
+```{r cor_white_dry, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,     cache.path = 'cache/', fig.path='figure/'}
+mosthighlycorrelated(whiteDry[1:12], 10)
+```
+
+
+Again we see some interesting correlations that make sense and some that are 
+curious.
+
+Notes:
+
+* pH levels are generally negatively correlated with acidity which makes sense 
+as the lower the pH the higher the acidity of the compound in question.
+* Alcohol negatively correlates to density, which makes sense as alcohol has a 
+lower density than water, thus higher alcohol content will decrease overall 
+density.
+* Total sulfur dioxide levels positively correlate with free sulfur dioxide, 
+given free sulfur is a part of the total a positive correlation is to be 
+expected
+* Alcohol has the highest correlation to quality, why is unclear, though low 
+alcohol content may in some cases indicate an interrupted fermentation process 
+leading to low alcohol wines scoring poorly in quality.
+* For white wines density has a weak negative correlation with quality. 
+Given that dry wines have less sugar and sugar has a high density, this makes 
+sense. 
+    + A Dry wine is not expected to be sweet and therefore should have less 
+    sugar and as such lower density. Therefore a higher density might imply 
+    compounds may be out of balance or fermentation was interrupted, leading 
+    in some cases to a low quality score.
+    + As density negatively correlates to quality for dryer White wines it 
+    implies that factors that contribute to density like sugar and alcohol 
+    content, acidity and sulfur content etc. require more careful balancing 
+    than they do for sweeter wines where the sugar can more easily mask poor 
+    flavors.
+* Interestingly, for dry red wines, citric acid correlates with density almost 
+as much as sugar. Given that citric acid has a density of 1.66 g/cm^3^ vs water 
+which is 1 g/cm^3^ it makes sense that citric acid would increase the density 
+of the wine. 
+    + Citric acid is slightly more dense than sugar which has a density of 
+    1.59 g/cm^3^ so intuition might at first lead you to think that citric acid 
+    should correlate more strongly to density than sugar. 
+    + But even for low sugar wines the amount of citric acid present is 
+    significantly less than sugar with some wines having no citric acid added 
+    at all. In fact it's so much less that it's correlation to density being as 
+    close to sugar's correlation to density is actually a bit surprising.
+* Another notable but obvious correlation is free and total sulfur, where free 
+sulfur is a component of total sulfur
+* In Dry White wines we see chloride(salt) correlating weakly with density. 
+This makes sense as the density of salt is 2.16 g/cm³ and like citric acid the 
+amounts present compared to sugar are minute.
+  
+
+Let's look at some of these correlations with plots. 
+
+### Total Acids
+
+
+As part of the process I will first combine Volatile, Fixed and Citric acid into 
+a new variable: 'totalacid' and plot it.
+
+
+```{r all_acids_into_one_variable,echo=FALSE, message=FALSE, warning=FALSE,  cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+
+redDry <- within(redDry, totalacid <- volatile.acidity + fixed.acidity 
+                 + citric.acid ) 
+
+whiteDry <- within(whiteDry, totalacid <- volatile.acidity + fixed.acidity 
+                   + citric.acid )
+```
+
+
+```{r pH_total_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,     cache.path = 'cache/', fig.path='figure/'}
+ta1 <- ggplot(data=redDry, aes(x = pH, y = totalacid))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_y_continuous(breaks=seq(0, 18, by =4))+
+  scale_x_continuous(breaks=seq(2, 4.25, by = .25))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Total Acidity and pH", x = 'pH', 
+       y = "Total Acidity")
+
+
+ta2 <- ggplot(data=whiteDry, aes(x = pH, y = totalacid))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_y_continuous(breaks=seq(0, 18, by =4))+
+  scale_x_continuous(breaks=seq(2, 4.5, by =.25))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Total Acidity and pH", x = 'pH', 
+       y = "Total Acidity")
+
+
+grid.arrange(ta1, ta2, ncol=1)
+```
+
+
+Here we see the correlation between pH and total acid is negative. Lower pH 
+correlates to higher acidity. Of course this is not absolute as many other 
+factors in the wine contribute to the final pH levels
+
+We can also see the correlation holds with white wines, albeit not as pronounced.
+
+
+### Volatile Acidity
+ 
+Volatile Acidity, the compound giving the vinegar aroma to wine seems to have 
+only weak correlations with pH levels however in levels of .6-.8/liter or higher 
+the unpleasant aroma becomes perceptible. 
+
+So I posit that wines with higher Volatile Acid levels:
+
+* Winemakers will be especially careful to control the amount of Volatile 
+Acidity
+* SO2 is used to balance Volatile acids so I would expect there to be a mostly 
+balanced relationship between SO2 and Volatile Acids (a mostly flat smoothing 
+line).
+
+
+### pH vs. Volatile Acidity
+
+ 
+```{r pH_V_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,         cache.path = 'cache/', fig.path='figure/'}
+va1 <- ggplot(data=redDry, aes(x = pH, y = volatile.acidity))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks=seq( 2,4, by =.25))+
+  scale_y_continuous(breaks=seq( 0,1.5, by = .4))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Acidity and pH", x = 'pH', y = "Volatile Acidity")
+
+
+va2 <- ggplot(data=whiteDry, aes(x = pH, y = volatile.acidity))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks=seq( 2,4, by =.25))+
+  scale_y_continuous(breaks=seq( 0,1.5, by = .4))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Acidty and pH", x = 'pH', y = "Volatile Acidity")
+
+grid.arrange(va1, va2, ncol=1)
+
+```
+
+
+I did not see as smooth a line as I would have expected for red wines where the 
+trend is slightly upwards, volatile acidity to pH, while with white wines the 
+trend is fairly flat.
+
+
+### Quality vs. Volatile Acidity
+
+I wonder how that correlates to quality?
+
+
+```{r quality_v_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,     cache.path = 'cache/', fig.path='figure/'} 
+vaq1 <- ggplot(data=redDry, aes(x = volatile.acidity, y = quality ))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks=seq(0,1.6, by = 0.2))+
+  scale_y_continuous(breaks=seq(1,4, by=1))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Volatile Acidity and Quality", 
+       x = 'Volatile Acids', y = "Quality")
+
+
+vaq2 <- ggplot(data=whiteDry, aes(x = volatile.acidity, y = quality))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks=seq(0,1.6, by = 0.2))+
+  scale_y_continuous(breaks=seq(1,4, by=1))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Volatile Acidity and Quality", 
+       x = 'Volatile Acids', y = "Quality")
+
+grid.arrange(vaq1, vaq2, ncol=1)
+```
+
+
+Reds tend to have higher volatile acids then whites, overall it seems higher 
+quality wines tend to have lower levels of volatile acids.
+
+This mostly matches my expectations. A wine with high volatile acids is more 
+likely to "spoil", tasting/smelling of vinegar. 
+
+
+### Sulfur Dioxide (SO2) and Volatile Acidity
+
+Next I want to look at the relationship between Total SO2 and Volatile acids.
+
+
+```{r tso2_v_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+ta_so2_1 <- ggplot(data=redDry, aes(x = total.sulfur.dioxide, 
+                                    y = volatile.acidity))+
+  geom_point(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks= seq(0,350, by = 50))+
+  scale_y_continuous(breaks= seq(0, 1.6, by = .4))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Volatile Acidity and SO2", x = 'Total SO2', 
+       y = "Volatile Acids")
+
+
+ta_so2_2 <- ggplot(data=whiteDry, aes(x = total.sulfur.dioxide, 
+                                      y = volatile.acidity))+
+  geom_point(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks= seq(0,350, by = 50))+
+  scale_y_continuous(breaks= seq(0, 1.6, by = .3))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Volatile Acidity and SO2", x = 'Total SO2', 
+       y = "Volatile Acids")
+
+
+grid.arrange(ta_so2_1, ta_so2_2, ncol=1)
+```
+
+
+White Dry wines tend to have higher levels of SO2 but lower levels of 
+volatile acids when compared to dry red wines. 
+
+White wines cluster heavily between 50 and 200 SO2 mg / dm^3^ while reds are 
+more heavily concentrated between 0 and 50 SO2 mg / dm^3^.
+
+Meanwhile volatile acids are tightly concentrated in white wines with the 
+majority of wines having less than 5 g / dm^3^ of acetic acid with relatively 
+few outliers while with red wines volatile acidity is more evenly distributed 
+throughout the range and peaks higher.
+
+Overall the relationship between SO2 and Volatile acids seems fairly flat with 
+little if any correlation
+
+I expect these trends to hold true for Free Sulfur Dioxide as well
+
+
+```{r fso2_v_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+fa_so2_1 <- ggplot(data=redDry, aes(x = free.sulfur.dioxide, 
+                                    y = volatile.acidity))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks= seq(0, 140, by = 10))+
+  scale_y_continuous(breaks= seq(0, 1.6, by = .3))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Volatile Acidity and Free SO2", x = 'Free SO2', 
+       y = "Volatile Acids")
+
+
+fa_so2_2 <- ggplot(data=whiteDry, aes(x = free.sulfur.dioxide, 
+                                      y = volatile.acidity))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks= seq(0, 140, by = 10))+
+  scale_y_continuous(breaks= seq(0, 1.6, by = .3))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Volatile Acidity and Free SO2", 
+       x = 'Free SO2', y = "Volatile Acids")
+
+grid.arrange(fa_so2_1, fa_so2_2, ncol=1)
+```
+
+
+As expected the distribution of Free SO2 Levels between red and white wines are 
+similar to the distributions of Total SO2 between red and white with white wines tending to have more wines with slightly higher amounts of free sulfur. 
+
+Zooming in to eliminate outliers we can see this trend holds true.
+
+First using a bar plot
+
+
+```{r fso2_v_acid_bar, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+zbfa_so2_1 <- ggplot(data=redDry, aes(x = free.sulfur.dioxide, 
+                                    y = volatile.acidity))+
+  geom_bar(stat="identity", position = "stack",color="steelblue", 
+           alpha= .25)+
+  scale_x_continuous(limits = 
+       c(min(redDry$free.sulfur.dioxide[redDry$free.sulfur.dioxide >= 0.0]),
+                          quantile(redDry$free.sulfur.dioxide, 0.98)))+
+  labs(title="Dry Red Wine Volatile Acidity and Free SO2", x = 'Free SO2', 
+       y = "Volatile Acids")
+
+
+zbfa_so2_2 <- ggplot(data=whiteDry, aes(x = free.sulfur.dioxide, 
+                                      y = volatile.acidity))+
+  geom_bar(stat="identity", position = "stack",color="steelblue", 
+           alpha= .25)+
+  scale_x_continuous(limits = 
+       c(min(whiteDry$free.sulfur.dioxide[whiteDry$free.sulfur.dioxide>=0.0]),
+                          quantile(whiteDry$free.sulfur.dioxide, 0.98)))+
+ labs(title="Dry White Wine Volatile Acidity and Free SO2", 
+       x = 'Free SO2', y = "Volatile Acids")
+
+grid.arrange(zbfa_so2_1, zbfa_so2_2, ncol=1)
+```
+
+The barplot at first glance seems to show that as SO2 increases volatile acidity increases, this seems especially true of red wines. But that is not the correct interpretation. The plot is showing the distribution of of volatile acidity with respect to SO2. If you look at red wines the volatile acidity and SO2 cluster at
+the lower ranges while with white wines there is a somewhat normal distribution 
+between ~10 and 40 mg / dm^3^
+
+A contour plot might help make the relationship clearer:
+
+```{r cfso2_v_acid_con, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+zcfa_so2_1 <- ggplot(data=redDry, aes(x = free.sulfur.dioxide, 
+                                    y = volatile.acidity))+
+  stat_density2d(geom = "density2d", position = "identity", contour = TRUE)+
+  scale_x_continuous(limits = 
+       c(min(redDry$free.sulfur.dioxide[redDry$free.sulfur.dioxide >= 0.0]),
+                          quantile(redDry$free.sulfur.dioxide, 0.98)))+
+  labs(title="Dry Red Wine Volatile Acidity and Free SO2", x = 'Free SO2', 
+       y = "Volatile Acids")
+
+
+zcfa_so2_2 <- ggplot(data=whiteDry, aes(x = free.sulfur.dioxide, 
+                                      y = volatile.acidity))+
+  stat_density2d(geom = "density2d", position = "identity",contour = TRUE)+
+  scale_x_continuous(limits = 
+  c(min(whiteDry$free.sulfur.dioxide[whiteDry$free.sulfur.dioxide >= 0.0]),                             quantile(whiteDry$free.sulfur.dioxide, 0.98)))+
+  labs(title="Dry White Wine Volatile Acidity and Free SO2", 
+       x = 'Free SO2', y = "Volatile Acids")
+
+grid.arrange(zcfa_so2_1, zcfa_so2_2, ncol=1)
+```
+
+
+Looking at this like a geographical contour map we can see that with red wines 
+volatile acidity and SO2 plateau towards the lower end of the scale.
+
+White wines show us a lower plateau for volatile acidity but higher for SO2. We 
+can also see the steepness of the "slope" for SO2 is steeper for white wines 
+then for red while red has a steeper initial slope for volatile acidity with 
+a gentle downward slope as SO2 increases.
+
+Overall while there does appear to be a relationship between free sulfur content 
+and volatile acidity, it is a fairly weak correlation. White wines tend to have 
+higher amounts of both.
+
+
+Let's see how Volatile acidity relates to sulphates
+
+
+```{r  sulph_v_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+su_ta_1 <- ggplot(data=redDry, aes(x = sulphates, y = volatile.acidity))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks= seq(0, 2, by = .2))+
+  scale_y_continuous(breaks= seq(0, 1.6, by = .3))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Volatile Acidity and Sulphates",
+       x = 'Sulphates', y = "Volatile Acids")
+
+su_ta_2 <- ggplot(data=whiteDry, aes(x = sulphates, y = volatile.acidity))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  scale_x_continuous(breaks= seq(0, 2, by = .2))+
+  scale_y_continuous(breaks= seq(0, 1.6, by = .3))+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Volatile Acidity and Sulphates", 
+       x = 'Sulphates', y = "Volatile Acids")
+
+grid.arrange(su_ta_1, su_ta_2, ncol=1)
+```
+
+
+Again we see fairly flat plots. Red wines tend to have higher sulphates and 
+volatile acidity than white wines.
+
+Looking at the data as a contour plot below we can confirm red wines plateau 
+higher for sulphates and volatile acidity.
+
+
+```{r  c_sulph_v_acid, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+csu_ta_1 <- ggplot(data=redDry, aes(x = sulphates, y = volatile.acidity))+
+  stat_density2d(geom = "density2d", position = "identity", contour = TRUE)+
+  labs(title="Dry Red Wine Volatile Acidity and Sulphates",
+       x = 'Sulphates', y = "Volatile Acids")
+
+csu_ta_2 <- ggplot(data=whiteDry, aes(x = sulphates, y = volatile.acidity))+
+  stat_density2d(geom = "density2d", position = "identity", contour = TRUE)+
+  labs(title="Dry White Wine Volatile Acidity and Sulphates", 
+       x = 'Sulphates', y = "Volatile Acids")
+
+grid.arrange(csu_ta_1, csu_ta_2, ncol=1)
+```
+
+
+
+I wonder how sulphates look measured against quality? 
+
+
+```{r sulph_q, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,            cache.path = 'cache/', fig.path='figure/'}
+sulph_q1 <- ggplot(data=redDry, aes(x = quality, y = sulphates))+
+  coord_flip()+
+  geom_boxplot(aes(group = cut_width(quality, 0.25)),
+               outlier.shape=NA, fill = "steelblue", 
+               colour = "black")+
+  labs(title="Dry Red Wine Sulphates and Quality", x = 'Quality', 
+       y = "Sulphates")
+
+
+sulph_q2 <- ggplot(data=whiteDry, aes(x = quality, y = sulphates))+
+  coord_flip()+
+  geom_boxplot(aes(group = cut_width(quality, 0.25)),
+               outlier.shape=NA, fill = "steelblue", 
+               colour = "black")+
+  labs(title="Dry White Wine Sulphates and Quality", x = 'Quality', 
+       y = "Sulphates")
+
+grid.arrange(sulph_q1, sulph_q2, ncol=1)
+
+```
+
+
+
+Using box plots that ignore outliers we can see that for dry whites there is a 
+slight positive correlation between sulphates and quality. For dry reds 
+correlation appears stronger. However white wines tend to have lower sulphate 
+levels overall at each level of quality. 
+
+This at first is somewhat surprising as generally white wines contain more 
+sulfates than red as it is important to maintain the freshness of the wines, but 
+this could be accounted for by taking total sulfur into account as shown below.
+
+
+
+```{r tsulph_q, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,          cache.path = 'cache/', fig.path='figure/'}
+tsulph_q1 <- ggplot(data=redDry, aes(x = quality, y = total.sulfur.dioxide))+
+  coord_flip()+
+  geom_boxplot(aes(group = cut_width(quality, 0.25)),
+               outlier.shape=NA, fill = "steelblue", 
+               colour = "black")+
+  labs(title="Dry Red Wine Total Sulfur and Quality", x = 'Quality', 
+       y = "Sulphates")
+
+
+tsulph_q2 <- ggplot(data=whiteDry, aes(x = quality, y = total.sulfur.dioxide))+
+  coord_flip()+
+  geom_boxplot(aes(group = cut_width(quality, 0.25)),
+               outlier.shape=NA, fill = "steelblue", 
+               colour = "black")+
+  labs(title="Dry White Wine Total Sulfur and Quality", x = 'Quality', 
+       y = "Sulphates")
+
+grid.arrange(tsulph_q1, tsulph_q2, ncol=1)
+
+```
+
+
+Here we can see white wines have more overall sulfates than reds.
+
+
+### Sugar and pH
+
+So how does sugar relate to pH? As it is neutral it should decrease the pH of the wine.
+
+
+```{r ph_sugar, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,          cache.path = 'cache/', fig.path='figure/'}
+ph_s_1 <- ggplot(data=redDry, aes(x = residual.sugar, y = pH))+
+  geom_point(stat="identity", color="steelblue", alpha= .25)+
+  labs(title="Dry Red Wine Sugar vs pH", x = 'Sugar', y = "pH" )
+
+
+ph_s_2 <- ggplot(data=whiteDry, aes(x = residual.sugar, y = pH))+
+  geom_point(stat="identity", color="steelblue", alpha= .25)+
+  labs(title="Dry White Wine Sugar vs pH", x = 'Sugar', y = "pH" )
+
+
+grid.arrange(ph_s_1, ph_s_2, ncol=2)
+```
+
+
+There does not seem to be much of a correlation. That at first seems surprising 
+as you would expect sugar to reduce pH levels. But given the relatively low 
+levels of sugar in dry wines it is likely there is not enough to significantly 
+impact overall acidity.
+
+
+### Sugar and density
+
+Next let's look at sugar and density
+
+
+```{r sugar_density, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+sd1 <- ggplot(data=redDry, aes(x = residual.sugar, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Sugar vs Density", x = 'Residual Sugar', 
+       y = "Density")
+
+
+sd2 <- ggplot(data=whiteDry, aes(x = residual.sugar, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Sugar vs Density", x = 'Residual Sugar', 
+       y = "Density")
+
+grid.arrange(sd1, sd2, ncol=1)
+
+```
+
+
+With red wines it appears that sugar has a slight but notable impact in density, 
+while on white wines the impact appears negligible
+
+
+
+### Alcohol% vs Density
+
+Now lets look at alcohol % vs density.
+
+
+```{r alc_dens2, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,                cache.path = 'cache/', fig.path='figure/'}
+
+ad1 <- ggplot(data=redDry, aes(x = alcohol, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Alcohol vs Density", x = 'Alcohol', 
+       y = "Density")
+
+
+ad2 <- ggplot(data=whiteDry, aes(x = alcohol, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Alcohol vs Density", x = 'Alcohol', 
+       y = "Density")
+
+
+grid.arrange(ad1,ad2, ncol=1)
+```
+
+
+As expected as alcohol content increases, density decreases. The effect is quite pronounced for both white and red wines.
+
+
+### Alcohol % and Sugar
+
+The amount of sugar left is a byproduct of the amount of sugar the grapes 
+started with and the fermentation process. So I wonder if we will see a 
+relationship between sugar and alcohol?
+
+
+```{r sug_alc1, echo=FALSE, message=FALSE, warning=FALSE,  cache=TRUE,         cache.path = 'cache/', fig.path='figure/'}
+sualc1 <- ggplot(data=redDry, aes(x = alcohol, y = residual.sugar))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Alcohol vs Sugar", x = 'Alcohol', y = "Sugar")
+
+
+sualc2 <- ggplot(data=whiteDry, aes(x = alcohol, y = residual.sugar))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Alcohol vs Sugar", x = 'Alcohol', y = "Sugar")
+
+
+grid.arrange(sualc1,sualc2, ncol=1)
+```
+
+
+For Dry reds it is pretty flat which is to be expected. For dry white wines we 
+do see a slight trend for higher sugar at higher alcohol, this is probably 
+explained by the initial sugar content of the grapes used or chaptalization 
+(adding sugar before fermentation to achieve a higher alcohol content or higher residual sugar). 
+
+
+
+### Density exploration
+
+
+I wonder how sugar + alcohol combined will correlate to density. First I will 
+create a new variable "sugarAlco" by combining alcohol and sugar.
+
+
+```{r create_new_var_sug_alc, echo=FALSE, message=FALSE, warning=FALSE,       cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+# combine alcohol and sugar into new vaiable
+redDry <- within(redDry, sugarAlco <- residual.sugar+alcohol) 
+
+whiteDry <- within(whiteDry, sugarAlco <- residual.sugar+alcohol )
+```
+
+
+Then plot the resulting variable against density.
+
+
+```{r sa_d, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,              cache.path = 'cache/', fig.path='figure/'}
+sa_d1 <- ggplot(data=redDry, aes(x = sugarAlco, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Sugar + Alcohol vs Density", x = 'Sugar + Alcohol', 
+       y = "Density")
+
+
+sa_d2 <- ggplot(data=whiteDry, aes(x = sugarAlco, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Sugar + Alcohol vs Density", 
+       x = 'Sugar + Alcohol', 
+       y = "Density")
+
+
+grid.arrange(sa_d1,sa_d2,ncol=1)
+```
+
+The alcohol still has a more pronounced effect, still showing 
+us a negative correlation with density despite factoring sugar, a density 
+increaser, in.
+
+This is no surprise as Dry wines have very little, if any sugar. 
+
+Earlier we saw that acid levels and chlorides also related to density. Lets see 
+how that looks when plotted with sugar and alcohol.
+
+I will create a new variable called "SuALCi" which combines the values for 
+sugar, acids, alcohol and chlorides (salt). 
+
+
+```{r create_new_var_SuALCi, echo=FALSE, message=FALSE, warning=FALSE,       cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+# combine sugar,alcohol and acids and chlorides into new variable
+redDry <- within(redDry, SuALCi <- sugarAlco+citric.acid+ fixed.acidity+ volatile.acidity+chlorides) 
+
+whiteDry <- within(whiteDry, SuALCi <- sugarAlco+citric.acid+ fixed.acidity+ volatile.acidity+chlorides )
+
+```
+
+
+
+```{r sa_c_acid_den, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,      cache.path = 'cache/', fig.path='figure/'}
+SuALCi1 <- ggplot(data=redDry, aes(x = SuALCi, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Wine Sugar + Acids + Alcohol + Salt vs Density", 
+       x = 'Sugar + Acids + Alcohol + Salt', y = "Density")
+
+
+SuALCi2 <- ggplot(data=whiteDry, aes(x = SuALCi, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Sugar + Acids + Alcohol + Salt vs Density", 
+       x = 'Sugar + Acids + Alcohol + Salt + Citrc Acid', y = "Density")
+
+grid.arrange(SuALCi1, SuALCi2, ncol=1)
+```
+
+
+Factoring in salts and acids and we can see definite correlations, surprisingly 
+in opposite directions. For red wines we see density increasing while for whites 
+we see it decreasing. 
+
+
+
+### Recalculating Density
+
+There is an issue with the plots above though. We have ADDED  alcohol when in 
+reality it has a negative correlation to density and should be subtracted. We 
+are also combining different units of measurement as if they were the same.
+
+I think the density relationship between components can be made clearer still by subtracting alcohol values from the rest of the density drivers we are using 
+rather than adding it and by standardizing units of measurement.
+
+* An average bottle of wine is 0.75 liters so we will assume that each bottle 
+in our data-sets are standard sized bottles. 
+    + Note that this assumption could be wrong as it is possible some of the 
+    wines tasted came from smaller or larger bottles.
+* Density is measured as g/cm^3^
+* The density of water is about 1 g/cm^3^ since the gram was originally 
+defined as the mass of one cubic centimeter of water at its maximum density at 
+4 °C. So 1 g/cm^3^ is equivalent to: 1000 g/l.
+* Assuming the bottle is 100% water we would have a starting number of 
+750g/cm^3^
+* Subtracting the difference of alcohol's density from water, for each percent 
+of alcohol we would subtract .213g/cm^3^ as alcohol weights 0.787g/cm^3^.
+* We would then add the 0.001 g/cm^3^ * values of acids, chlorides, residual 
+sugar and sulphates and 0.000001 g/cm^3^ for sulfurs then divide by 750 to get 
+a density score.
+* This should give us a rough approximation of the density derived from the 
+compounds we are given and highlight if there may be components driving density 
+other than the compounds in our data-set
+
+So I will create a new variable called "densityDriver" and plot it against 
+density.
+
+
+```{r create_densityDriver_var, echo=FALSE, message=FALSE, warning=FALSE,      cache=TRUE,  cache.path = 'cache/', fig.path='figure/'}
+# combine all compounds into new variable densitydrivers
+redDry <- within( redDry, densityDrivers <- ((750 - (alcohol*.213) + 
+                                                ((residual.sugar + 
+                                                    fixed.acidity + 
+                                                    volatile.acidity + 
+                                                    citric.acid + 
+                                                    chlorides + sulphates)
+                                                 *0.001) + 
+                                                (total.sulfur.dioxide * 
+                                                   0.000001)))/750 )
+
+whiteDry <- within(whiteDry, densityDrivers <- ((750 - (alcohol*.213) + 
+                                                ((residual.sugar + 
+                                                    fixed.acidity + 
+                                                    volatile.acidity + 
+                                                    citric.acid + 
+                                                    chlorides + sulphates)
+                                                 *0.001) + 
+                                                (total.sulfur.dioxide * 
+                                                   0.000001)))/750 )
+
+```
+
+
+Plotting this new density driver variable against density:
+
+
+```{r d_v_dd1, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+dd1 <- ggplot(data=redDry, aes(x = densityDrivers, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry Red Density Drivers vs Density", 
+       x = 'Density Drivers', y = "Density")
+
+
+dd2 <- ggplot(data=whiteDry, aes(x = densityDrivers, y = density))+
+  geom_point(alpha= .25)+
+  geom_jitter(color="steelblue", alpha= .25)+
+  stat_smooth(color= I('red'))+
+  labs(title="Dry White Wine Density Drivers vs Density", 
+       x = 'Density Drivers', y = "Density")
+
+grid.arrange(dd1,dd2,ncol=1)
+```
+
+
+The Density Drivers strongly correlate with density, but as shown in the next 
+set of graphs are not quite perfect fits.
+
+
+
+```{r d_v_dd2, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+dd_1 <- ggplot(redDry, aes(x=density)) +
+  geom_histogram(bins= 15, colour="black", fill="green")+
+  labs(title="Density Dry Reds")
+
+dd_2 <- ggplot(whiteDry, aes(x=density)) +
+  geom_histogram(bins= 15, colour="black", fill="green")+
+  labs(title="Density Dry Whites")
+
+dd_3 <- ggplot(redDry, aes(x=densityDrivers)) +
+  geom_histogram(bins= 15, colour="black", fill="red")+
+  labs(title="Density Drivers Dry Reds")
+
+dd_4 <- ggplot(whiteDry, aes(x=densityDrivers)) +
+  geom_histogram(bins= 15, colour="black", fill="red")+
+  labs(title="Density Drivers Dry Whites")
+
+grid.arrange(dd_1, dd_2, dd_3, dd_4, ncol=2)
+```
+
+Looking at histograms of density values compared with density driver values 
+we can see there is a lot more variance in actual densities than computed 
+densities, from this I conclude that there may be factors not included in the 
+data-set that feed into total density. 
+
+For example, mineral contents absorbed by the grapes from 
+the soil they grow in and other compounds not included in the data-set.
+
+Also, as noted earlier, we started with the assumption of a standard 750ml 
+wine bottle for all bottles in the set, but some wine may be from smaller or 
+larger sized bottles.
+
+Nonetheless, while density drivers are different from actual densities they are 
+within .001 to .006 g/cm^3^.
+
+Interestingly there are farther off for red wines than white.
+
+***
+
+# Bivariate Analysis
+
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the data-set?
+
+As expected there were no clear correlations with any single variable and 
+quality. In fact I believe it is highly likely that based on just the 11 
+components we have in this data-set we don't have enough information to 
+accurately predict quality. 
+
+As Sherlock Holmes said: “Data!data!data! I can't make bricks without clay.”
+
+So far there does not appear to be enough differentiation contained within the 
+11 variables we have to draw solid conclusions with regards to quality. There 
+are too many other factors from the weather, to how the wine was aged, to the 
+intended goal of the winemaker and several other compounds not included like 
+tannins, minerals, flavinols, lactones, thiols etc. etc..
+
+What I did observe were that many of the compounds interact or relate with 
+each other. However, with relation to quality, the relationships are likely quite complex, involving the interplay of multiple variables at once together, as such looking at the interaction of just one or two variables at a time isn't giving a 
+clear enough signal so far to confidently predict quality.
+ 
+* Acidity and pH are closely related, which is obvious as pH is a measure of 
+acidity. 
+* Perhaps less obvious is the lack of a correlation between sugar and pH levels (acidity). While at first it may seem surprising, give that it is a byproduct of 
+the wine making process and not an additive (with some exceptions 
+pre-fermentation) it makes sense. 
+* Combining the compounds in the wine to arrive at a density was an interesting exercise. It revealed that there are likely other compounds that have an impact 
+on density and that it is also likely that not all bottles included in the 
+data set were the standard .75 liter size. 
+* The relationship between sulphates (an additive) and quality was interesting. Sulphates are used to prevent oxidation of wines, to prevent secondary 
+fermentation from occurring and preventing volatile acids from turning into 
+vinegar by acting as an antimicrobial and antioxidant. Essentially it is a preservative. As with so many of the other compounds observed in this data-set 
+while there were indications of its association with quality there was not a 
+strong association.
+* Ultimately wine making is about balancing the compounds in the grape, 
+additives, the fermentation process, the aging process before bottling, it's 
+intended time to maturity (when it is ready to be drunk) and the wine-maker's 
+goal for the wine etc.. 
+* While there are some definite relationships between compounds, for example 
+acids and pH, Sulfurs and total sulfur content. These are within group 
+relationships. Between group relationships are much harder to discern, 
+especially as they are likely to involve multiple between group and within 
+group interactions.
+* For example while we know sulphates are added to wines to stabilize the 
+volatile acids, in order to say with confidence that the sulphur has had a 
+definitive impact on the amount of acid present we would need to know the 
+amount of acid present before the sulphates were added, how old the wine was 
+and how it was stored (time and temperature both are factors in the breakdown 
+of volatile acids into vinegar) etc.
+
+
+
+### Did you observe any interesting relationships between the other features        (not the main feature(s) of interest)?
+
+Across all wines the amounts of volatile acids present correlated with quality. 
+Though it was not a strong correlation (was not +/-0.5 or more) there was 
+a weak negative correlation
+
+A surprising correlation is total sulfur and density with a positive correlation (sulfur increases density) of 0.53. 
+
+Citric acid, Fixed acidity and Volatile acidity all strongly correlated with 
+pH when looked at together. Again no surprise as pH is a measure of acidity.
+
+Free and Total sulfur are strongly correlated but given the first is a component 
+of the second it's not surprising.
+
+***
+
+### What was the strongest relationship you found?
+
+Alcohol had the strongest positive correlation to quality, while density had 
+the strongest negative correlation. 
+
+Given alcohol and density are related (alcohol reduces or is negatively 
+correlated with density) this is no surprise. And in fact the strongest 
+correlations between any variables was in fact alcohol and density with a 
+negative correlation of -0.78 and sugar and density with a positive 
+correlation of 0.84.
+
+***
+
+
+# Multivariate Plots Section
+
+### Volatile Acidty and Suplhates by Quality Level
+
+
+```{r rqu_sulp_va, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(x = sulphates, 
+           y = volatile.acidity  , color = factor(quality)), 
+       data = redDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+  scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="Red Wines: Volatile Acidty and Suplhates by Quality Level",
+       x = 'Sulphates', y = "Volatile Acidity" )
+```
+
+
+
+```{r wqu_sulp_va, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(x = sulphates, 
+           y = volatile.acidity  , color = factor(quality)), 
+       data = whiteDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+  scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="White Wines: Volatile Acidty and Suplhates by Quality Level",
+       x = 'Sulphates', y = "Volatile Acidity")
+```
+
+
+
+Looking at the plot for red wines we see higher quality wines tend to have mid 
+range volatile acidity and low range sulphates. 
+
+Poor quality wines show up mostly with very low low sulphates and evenly 
+distributed volatile acidity, sometimes higher than high quality wines.
+
+Mid quality red wines straddle the lower ranges for sulphates and low to upper 
+mid ranges for volatile acidity.
+
+Looking at white wines we see a wider distribution of sulphates across all 
+quality levels but higher quality wines do show more wines with higher sulphates. Volatile acidity shows up more often in the higher ranges for lower quality 
+wines than for higher quality, sometimes twice as much volatile acidity as higher quality wines.
+
+As a general rule of thumb it appears lower sulphates and volatile acidity in 
+red wines is a good indicator of quality, while quality white wines seem to 
+favor lower volatile acidity but are more tolerant of sulphates than reds.
+
+### Chlorides and Free Sulfur Dioxide by Quality Level
+
+Now let's look at Chlorides and Free sulfur dioxide. Again using Quality as a 
+color
+
+```{r rqu_chl_fs, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(x = chlorides, 
+           y = free.sulfur.dioxide  , color = factor(quality)), 
+       data = redDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+  scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="Red Wines: Chlorides and Free Sulfur Dioxide by Quality Level",
+       x = 'Chlorides(Salt)', y = "Free SO2" )
+
+```
+
+
+```{r wqu_chl_fs, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(x = chlorides, 
+           y = free.sulfur.dioxide  , color = factor(quality)), 
+       data = whiteDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+  scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="White Wines: Chlorides and Free Sulfur Dioxide by Quality Level",
+       x = 'Chlorides(Salt)', y = "Free SO2")
+
+```
+
+
+Looking at red wines we see chlorides are generally low across the board with 
+only a few wines in the mid and low range qualities having anything above low 
+chloride levels.
+
+Free Sulfur Dioxide is fairly evenly distributed.
+
+For white wines chloride levels tend to be lower overall while free sulfur 
+dioxide tends to be much higher than red wines, for the highest quality white 
+wines relatively low chlorides and mid ranges of free sulfur provide a quality 
+signal, albeit a weak one.
+
+
+### Residual Sugar, Citric Acid by Quality Levels
+
+
+Now let's look at Residual Sugar and Citric Acid by quality levels.
+
+
+```{r rqu_su_ca, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(x = residual.sugar, 
+           y = citric.acid, color = factor(quality)), 
+       data = redDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+      scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="Red Wines: Residual Sugar, Citric Acid by Quality Levels",
+       x = 'Residual Sugar', y = "Citric Acid" )
+```
+
+
+
+```{r wqu_su_ca, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(x = residual.sugar, 
+           y = citric.acid, color = factor(quality)), 
+       data = whiteDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+      scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="White Wines: Residual Sugar, Citric Acid by Quality Levels",
+       x = 'Residual Sugar', y = "Citric Acid" )
+```
+
+Residual Sugar is fairly evenly distributed between 1 and 3 g / dm^3^ for most 
+quality levels of red and white wines. Lowest quality red wines do tend to have 
+less sugar while mid range and higher quality reds show some higher levels of 
+sugar. For white wines sugar seems more evenly distributed across all quality 
+levels. 
+
+Red wines show lower overall levels of citric acid than white wines but there 
+does seem to be a "sweet zone"" for both red and white wines for sugar less than 
+3 g / dm^3^ and citric acid less than 0.5 3 g / dm^3^.
+
+Overall I don't see a strong quality signal here as the ranges vary greatly from 
+wine to wine within quality levels as well as across quality levels.
+
+### pH and Density by Quality Level
+
+Now let's look at pH and Density by Quality Level.
+
+```{r rqu_ph_de, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+qu_ph_de1 <- ggplot(aes(x = pH, 
+           y = density, color = factor(quality)), 
+       data = redDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+      scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="Red Wines: pH and Density by Quality Level",
+       x = 'pH', y = "Density" )
+```
+
+
+```{r wqu_ph_de, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+qu_ph_de2 <- ggplot(aes(x = pH, 
+           y = density, color = factor(quality)), 
+       data = whiteDry) +
+      geom_point(alpha = 0.6, size = 1) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+      scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="White Wines: pH and Density by Quality Level",
+       x = 'pH', y = "Density" )
+
+```
+
+Neither red nor white wines show a clear trend for pH or Density levels with 
+relation to quality.
+
+Overall red wines seem to have a higher tolerance for density at all quality 
+levels while white wines seem to have a higher tolerance for higher pH levels. 
+
+However there are enough outliers for this to be too weak a signal to be a 
+strong quality indicator.
+
+
+### Boxplots Revisited
+
+Earlier in the report we looked at boxplots for all variables vs quality for the 
+entire original data-sets.
+
+As the correlations have changed I want to look at them again, this time 
+using our simplified data-sets (only dry wines and quality 4-7, numbered as 1-4) 
+with outliers ignored.
+
+
+```{r bp_rf_alc, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            alcohol), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Alcohol by Quality", 
+  x = "Quality", 
+  y = "Alcohol")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean alcohol level does still trend towards increasing with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_rf_sulp, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            sulphates), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Sulphates by Quality", 
+  x = "Quality", 
+  y = "Sulphates")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean for sulphates still shows an increase with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality, but perhaps a better signal than most.
+
+
+```{r bp_rf_ca, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,                cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            citric.acid), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Citric Acid by Quality", 
+  x = "Quality", 
+  y = "Citric Acid")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean citric acid level shows a slight increase with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is still not a strong indicator of quality.
+
+
+```{r bp_rf_fa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            fixed.acidity), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Fixed Acidity by Quality", 
+  x = "Quality", 
+  y = "Fixed Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean fixed acidity level shows a slight increase with quality, a stronger
+signal than shown in our initial box-plots. 
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and reinforcing that, taken alone, 
+this is not a strong indicator of quality.
+
+
+```{r bp_rf_va, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            volatile.acidity), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Volatile Acidity by Quality", 
+  x = "Quality", 
+  y = "Volatile Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean volatile acidity level shows a definite decrease with quality. Given 
+volatile acidity is major factor in wine spoilage this is not surprising. 
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality, but is perhaps one of the strongest with sulphates.
+
+
+```{r bp_rf_rs, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            residual.sugar), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Residual Sugar by Quality", 
+  x = "Quality", 
+  y = "Residual Sugar")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sugar level shows almost no relationship to quality unlike our initial box-plots where we saw a decrease as sugar increased.
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_rf_chl, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            chlorides), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Chlorides by Quality", 
+  x = "Quality", 
+  y = "Chorides (Salt)")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean Chloride (salt) level seems barely changes with quality,
+* There are a multitude of data points above and below the means that are not 
+outliers which are still tightly distributed compared to other feature 
+distributions.
+* Taken alone chlorides are still not a strong indicator of quality.
+
+
+```{r bp_rf_pH, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            pH), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, pH by Quality", 
+  x = "Quality", 
+  y = "pH")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+
+* The mean pH level seems to decrease slightly with quality, though the trend is
+not pronounced. That said pH is a logarithmic scale so small deviations represent
+large changes in actual acidity levels, meaning the impact is more pronounced
+than it appears to be. 
+* pH along with sulphates and volatile acidity may be our three strongest 
+quality signals 
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_rf_fso, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            free.sulfur.dioxide), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Free Sulfer Dioxide by Quality", 
+  x = "Quality", 
+  y = "Free Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sulfur dioxide level still does not show a clear correlation with 
+quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_rf_tsa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            total.sulfur.dioxide), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Total Sulfur Dioxide by Quality", 
+  x = "Quality",
+  y = "Total Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean total sulfur dioxide level still does not show a clear correlation 
+with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_rf_dens, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            density), 
+        data = redDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="Red Wines, Density by Quality", 
+  x = "Quality",
+  y = "Density")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean density level slightly decreases with quality. This is probably due to
+differing levels of compounds affecting quality and the alcohol's impact on 
+density
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+#### White Wines: Box plots exploring feature relationships with quality
+
+
+```{r bp_wf_alc, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            alcohol), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Alcohol by Quality", 
+  x = "Quality", 
+  y = "Alcohol")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean alcohol level increases with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_wf_sulp, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            sulphates), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Sulphates by Quality", 
+  x = "Quality", 
+  y = "Sulphates")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sulphate level shows a slight positive correlation with quality unlike 
+the earlier plots where the relationship was not as clear. The signal is weaker 
+than with red wines but is still notable.
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_wf_ca, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,                cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            citric.acid), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Citric Acid by Quality", 
+  x = "Quality", 
+  y = "Citric Acid")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean citric acid level still shows little correlation with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_wf_fa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            fixed.acidity), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Fixed Acidity by Quality", 
+  x = "Quality", 
+  y = "Fixed Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean fixed acidity level still shows a slight decrease with quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_wf_va, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            volatile.acidity), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Volatile Acidity by Quality", 
+  x = "Quality", 
+  y = "Volatile Acidity")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean volatile acidity level now shows a stronger negative correlation
+with quality, unlike the initial box-plots where the relationship was not as 
+clear. Volatile acidity, as with red wines could be one of the stronger 
+predictors of quality
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is still not a strong indicator of quality.
+
+
+
+```{r bp_wf_rs, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            residual.sugar), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Residual Sugar by Quality", 
+  x = "Quality", 
+  y = "Residual Sugar")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean sugar level shows a slight positive correlation with quality, the 
+signal is stronger than in the initial box-plots even though we are looking at 
+only dry wines now.
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_wf_chl, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            chlorides), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Chlorides by Quality", 
+  x = "Quality", 
+  y = "Chorides (Salt)")+
+  theme(plot.title = element_text(size=11))
+```
+
+* The mean chloride level decreases with quality, however the distribution is
+very tight for the means
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_wf_pH, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            pH), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, pH by Quality", 
+  x = "Quality", 
+  y = "pH")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean pH level shows a slight increase with quality. As noted with red wines,
+a slight change in pH indicates a large change in acidity. 
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+```{r bp_wf_fso, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            free.sulfur.dioxide), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Free Sulfer Dioxide by Quality", 
+  x = "Quality", 
+  y = "Free Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean free sulfur dioxide level now shows a positive correlation with 
+quality unlike previously where the relationship was unclear
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_wf_tsa, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            total.sulfur.dioxide), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Total Sulfur Dioxide by Quality", 
+  x = "Quality",
+  y = "Total Sulfur Dioxide")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean total sulfur dioxide level shows a slight downward trend as quality
+increases after an initial upswing
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+
+```{r bp_wf_dens, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ggplot(aes(factor(quality), 
+            density), 
+        data = whiteDry) +
+  geom_jitter( alpha = .3)  +
+  geom_boxplot( alpha = .5, color = "steelblue", 
+                outlier.shape = NA)+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)+
+  labs(title ="White Wines, Density by Quality", 
+  x = "Quality",
+  y = "Density")+
+  theme(plot.title = element_text(size=11))
+```
+
+
+* The mean density level decreases with quality, it is most likely the impact of alcohol levels on density
+* There are a multitude of data points above and below the means that are not 
+outliers showing both a wide distribution and indicating that, taken alone, this
+is not a strong indicator of quality.
+
+
+Viewing the data from the box plots in a table makes the relationships clearer
+ 
+
+### __Component Trends by Color and Sweeteness Levels:__ 
+
+
+Legend:
+
+ "+"  = positive correlation with quality
+ 
+ "-"  = negative correlation with quality
+ 
+ "~"  = Varying correlation across quality levels
+ 
+ _Note for pH a negative correlation = higher acidity_
+ 
+ _Note pH is a logarithmic scale: a slight decrease can equal a_ 
+ _significant increase in acidity_
+ 
+ 
+ 
+ Variable                | Red Dry | White Dry | 
+------------------------ |---------|-----------| 
+Fixed Acidity            |  +      |  -        | 
+Volatile Acidity         |  -      |  -        | 
+Citric Acid              |  +      |  +        |
+pH                       |  -      |  +        | 
+Sugar                    |  +      |  +        | 
+Alcohol                  |  +      |  +        | 
+Density                  |  ~      |  -        | 
+Chlorides (salt)         |  ~      |  -        | 
+Sulphates                |  +      |  +        | 
+Free SO2                 |  ~      |  +        | 
+Total SO2                |  ~      |  ~        |
+
+
+Looking at these box plots and the table for our wine groupings I notice the 
+following once outliers are removed:
+
+* For Red Dry Wines Citric Acid, Fixed Acidity, Alcohol, Sugar and Sulphates are 
+positively associated with higher quality values, while Volatile Acidity and pH, 
+show a definite negative correlation. Density, Chlorides, and Free and Total 
+Sulfur vary and do not provide a clear quality indication.
+* For White Dry Wines Acidity doesn't correlate as well for quality as it does 
+with Red, in fact we see slight negative correlations for all acids except
+Citric Acid. We see that pH also shows a positive correlation with quality along 
+with Sugar, Alcohol, Sulphates and Free SO2. Density shows a negative 
+correlation for quality along with Chlorides while Total SO2 varies too much to
+give a strong signal either way.
+* The constants with relation to quality across both reds and whites are Citric 
+Acid, Sugar, Alcohol and Sulphates all showing positive correlations while 
+Volatile acidity is consistently negative.
+* It should be noted that these correlations are not strong, for positive or 
+negative correlations.
+* Overall these charts illustrate the precarious balancing act required to 
+achieve higher quality wines and the dependency of style and type of wine on the 
+ideal balance of components.
+* It should be noted that no one single compound has a strong positive or 
+negative correlation with quality
+
+
+ 
+### Modeling the data
+
+The next step I will take is to standardize the independent variables and 
+conduct further analysis with the standardized variables.
+
+As a first step to modeling the data I will standardize the variables  
+
+```{r stnd_vars, echo=FALSE, message=FALSE, warning=FALSE,  cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+# creating new dataframe with compounds standardized
+
+stdRedDry <- as.data.frame(scale(redDry[1:11]))
+stdWhiteDry <- as.data.frame(scale(whiteDry[1:11]))
+```
+
+
+Then look at LDA: a method used to find a linear combination of features 
+that characterizes or separates two or more classes of objects or events, in 
+this case our 4 quality tiers.
+
+
+```{r lda, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+redDry3.lda <- lda(redDry$quality ~ stdRedDry$fixed.acidity + stdRedDry$volatile.acidity + stdRedDry$citric.acid + stdRedDry$residual.sugar 
+                   + stdRedDry$chlorides + stdRedDry$free.sulfur.dioxide 
+                   + stdRedDry$total.sulfur.dioxide +stdRedDry$density 
+                   + stdRedDry$pH + stdRedDry$sulphates+ stdRedDry$alcohol)
+
+whiteDry3.lda <- lda(whiteDry$quality ~ stdWhiteDry$fixed.acidity + stdWhiteDry$volatile.acidity + stdWhiteDry$citric.acid 
+                     + stdWhiteDry$residual.sugar + stdWhiteDry$chlorides + stdWhiteDry$free.sulfur.dioxide + stdWhiteDry$total.sulfur.dioxide + stdWhiteDry$density + stdWhiteDry$pH+ stdWhiteDry$sulphates
+                     + stdWhiteDry$alcohol)
+
+
+```
+
+Looking at the LDA Values:
+
+Red Dry wines
+
+```{r red_lda,echo=FALSE, message=FALSE, warning=FALSE,  cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+redDry3.lda.values <- predict(redDry3.lda, stdRedDry)
+redDry3.lda
+```
+
+
+White Dry Wines
+
+
+```{r white_lda, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+whiteDry3.lda.values <- predict(whiteDry3.lda, stdWhiteDry)
+whiteDry3.lda
+```
+
+
+```{r fu_mean_sd_group, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+ printMeanAndSdByGroup <- function(variables,groupvariable)
+  {# citation: code from https://goo.gl/zdzJK4
+     # find the names of the variables
+     variablenames <- c(names(groupvariable),names(as.data.frame(variables)))
+     # within each group, find the mean of each variable
+     groupvariable <- groupvariable[,1] # ensures groupvariable is not a list
+     means <- aggregate(as.matrix(variables) ~ groupvariable, FUN = mean)
+     names(means) <- variablenames
+     print(paste("Means:"))
+     print(means)
+     # within each group, find the standard deviation of each variable:
+     sds <- aggregate(as.matrix(variables) ~ groupvariable, FUN = sd)
+     names(sds) <- variablenames
+     print(paste("Standard deviations:"))
+     print(sds)
+     # within each group, find the number of samples:
+     samplesizes <- aggregate(as.matrix(variables) ~ groupvariable, 
+                              FUN = length)
+     names(samplesizes) <- variablenames
+     print(paste("Sample sizes:"))
+     print(samplesizes)
+  }
+```
+
+
+Looking at the Means and Standard Deviations for each quality grouping: Dry 
+Reds, Dry Whites, Medium Dry Whites and Medium Whites (the sweetest)
+
+
+Dry Reds
+
+```{r red_mn_std_grp, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+printMeanAndSdByGroup(redDry3.lda.values$x,redDry[12])
+```
+
+
+Dry Whites
+
+
+```{r White_mn_std_grp, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,               cache.path = 'cache/', fig.path='figure/'}
+printMeanAndSdByGroup(whiteDry3.lda.values$x,whiteDry[12])
+```
+
+
+
+```{r accuracy_function, echo=FALSE, message=FALSE, warning=FALSE,            cache=TRUE, cache.path = 'cache/', fig.path='figure/'}
+calcAllocationRuleAccuracy <- function(ldavalue, groupvariable, 
+                                       cutoffpoints)
+  {  # citation: code from https://goo.gl/zdzJK4
+ # find out how many values the group variable can take
+     groupvariable2 <- as.factor(groupvariable[[1]])
+     levels <- levels(groupvariable2)
+     numlevels <- length(levels)
+# calculate the number of true positives and false negatives for each group
+     numlevels <- length(levels)
+     for (i in 1:numlevels)
+     {
+        leveli <- levels[i]
+        levelidata <- ldavalue[groupvariable==leveli]
+ # see how many of the samples from this group are classified in each group
+        for (j in 1:numlevels)
+        {
+           levelj <- levels[j]
+           if (j == 1)
+           {
+              cutoff1 <- cutoffpoints[1]
+              cutoff2 <- "NA"
+              results <- summary(levelidata <= cutoff1)
+           }
+           else if (j == numlevels)
+           {
+              cutoff1 <- cutoffpoints[(numlevels-1)]
+              cutoff2 <- "NA"
+              results <- summary(levelidata > cutoff1)
+           }
+           else
+           {
+              cutoff1 <- cutoffpoints[(j-1)]
+              cutoff2 <- cutoffpoints[(j)]
+              results <- summary(levelidata > cutoff1 & levelidata <=
+                                   cutoff2)
+           }
+           trues <- results["TRUE"]
+           trues <- trues[[1]]
+           print(paste("Number of samples of group",leveli, 
+                       "classified as group",levelj," : ",
+              trues,"(cutoffs:",cutoff1,",",cutoff2,")"))
+        }
+     }
+  }
+```
+
+
+Calculating accuracy of the model for each group using the "Means" of our first 
+LD1 value + the second LD1 value/2 as our first cutoff, the second LD1 value 
+plus the third LD1 value/2 as the second cutoff and the third LD1 value plus the 
+fourth LD1 value/2 as our third cutoff.
+
+### Model Results
+
+#### Dry Reds:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, red_acc}
+calcAllocationRuleAccuracy(redDry3.lda.values$x[,1], redDry[12], 
+                           c(-0.7146074, -0.18788445, 0.9835549))
+```
+
+
+We can look at this output as a confusion matrix: How many of each group are 
+classified correctly vs how any are mis-classified.
+
+Legend: 
+Bold indicates correct classification 
+Italics indicates incorrect classification
+
+
+
+Red Dry Wines | 1        | 2       | 3       | 4
+------------- | -------- | ------- | ------- | --------
+1             | __25__   |   _6_   |  _13_   |  _2_
+2             | _366_    | __108__ | _120_   | _34_
+3             | _102_    |  _96_   | __217__ | _187_
+4             |  _2_     |  _6_    |  _30_   | __136__
+
+So our final results for Red Wines is 33.5% accuracy
+
+#### Dry Whites:
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, dwhite_acc}
+calcAllocationRuleAccuracy(whiteDry3.lda.values$x[,1], whiteDry[12], 
+                           c(-1.2533111, -0.36983065, 0.57926445))
+```
+
+
+White Dry Wines | 1        | 2       | 3       | 4
+--------------- | -------- | ------- | ------- | --------
+1               | __58__   |   _20_  |  _11_   |  _5_
+2               | _202_    | __166__ | _106_   | _42_
+3               |  _76_    |  _180_  | __334__ | _339_
+4               |  _1_     |  _34_   |  _111_  | __320__
+
+So our final results for Dry White Wines are 43.8% accuracy
+
+
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of       looking at your feature(s) of interest?
+
+There were no solid correlations with quality that I found. For most compounds 
+it seems the interplay between components or finding the right balance was the 
+key to quality and is largely determined by the type and style of wine.
+
+I did notice strong relationships between acidity and pH which was not 
+surprising. As acidity of a wine is quite important.
+
+Across the board chlorides (salt) was low for most wines, so was not much of a 
+quality signal except in high quantities when it correlated with lower quality 
+wines.
+
+Free sulfur showed a weak but surprising positive correlation with quality for 
+white wines.
+
+Volatile acids were almost universally low, where it was high (more than .5)
+it tended to indicate a poorer quality wine. But the correlation taken alone 
+was still weak (> than -0.5).
+
+Citric acid showed a positive correlation for quality for both red and white 
+wines.
+
+Overall pH between 3 and 3.5 was fairly standard with a few wines of varying 
+quality reaching levels around 4. Again there was not a strong quality signal 
+here. However as noted before slight differences in pH signify large 
+differences in overall acidity as pH is a log scale.
+
+During my analysis I found sulphates levels less than 1 to correlate with 
+quality for most wines.
+
+Dry red wines tended to exhibit higher citric acid and lower volatile acids, 
+higher alcohol and higher sulphates for a higher quality wine.
+
+Quality dry white wines tended to have higher sugar levels than reds, but only 
+slightly (1-2 grams/liter). This level of sugar isn't enough to be tasted as 
+"sweet" but is probably more about balancing other components and flavor 
+in the wines. Higher alcohol, sulphates and free sulfur were indications of 
+quality. Free sulfur is notable as it negatively correlates with quality on 
+dry red wines, however the difference is only about 20% higher concentrations 
+in dry whites.  
+
+All of these observations ignore outliers. 
+
+### Were there any interesting or surprising interactions between features?
+
+The exploration of density was interesting and while the computational model for calculating density I came up with was not perfect it was still fairly accurate.
+
+Sugar's positive impact on quality for white wines was surprising. As only dry 
+wines were included in my analysis I did not expect sugar to have much impact at 
+all.
+
+Sulphate's positive correlation for both dry and whites was a bit surprising as 
+well. It is used as a preservative so perhaps it should not have been surprising 
+but I did not expect it to correlate positively with quality given the myth of 
+sulphate headaches. The correlation was stronger in whites than reds.
+
+### Duplications Anomaly
+
+During my analysis of the wine I came across an interesting anomaly. There 
+are many duplication's in the wines sets. By duplication's I mean entries where 
+every variable was exactly the same. The likelihood of two wines having 
+exactly the same chemical composition, even 2 wines from the same winery but 
+different years are very unlikely. 
+
+It is possible that the wines came from 2 different wineries geographically 
+close and using the exact same grapes, mixture of grapes, processes and 
+wine maker... but unlikely. 
+
+My personal experience with wine tastings both back to back (same wine / 
+different vintage years) and by region has shown me that wines vary greatly in 
+taste even when grown and produced a few hundred meters from each other. 
+
+I have backpacked through the Bordeaux region of France and tasted wines both geographically close and back to back vintages and found the taste varies 
+tremendously even from wineries _literally_ __across the street from each__
+__other__.
+
+The wines in these data-sets in total were around 6500 wines. A typical tasting 
+by professionals rarely goes above 50-80 a day. So it is likely the full data 
+set of wines were from multiple tasting events.
+
+The duplication's were always in close sequence implying they were tasted at the 
+same event, on the same day.
+
+All wines came from Portugal.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, create_dup_lists}
+redDupes <- rw %>% group_by(fixed.acidity,volatile.acidity, citric.acid, residual.sugar,chlorides,free.sulfur.dioxide, total.sulfur.dioxide,density,pH,sulphates,alcohol,quality) %>% tally()
+
+RDcount <- redDupes %>% group_by(n) %>% tally()
+
+whiteDupes <- ww %>% group_by(fixed.acidity,volatile.acidity, citric.acid, residual.sugar,chlorides,free.sulfur.dioxide, total.sulfur.dioxide,density,pH,sulphates,alcohol,quality) %>% tally()
+
+WDcount <- whiteDupes %>% group_by(n) %>% tally()
+```
+
+
+I grouped the wines by all their variables and came up with a total number of duplication's:
+
+
+#### List of duplications for reds
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, red_dup_list}
+print.data.frame(RDcount)
+```
+
+#### List of duplications for whites
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, white_dup_list}
+print.data.frame(WDcount)
+```
+
+* For red wines there were 4 wines with 4 duplicate entries each, 12 wines 
+with 3 duplicate entries each and 204 wines with 2 duplicate entries each.
+* For white wines there were 2 wines with 8 duplicate entries, 2 with 7, 4 
+with 6, 6 with 5, 24 with 4, 61 with 3 and 673 with 2 duplicate entries.
+
+I define duplicate as having __all__ variables the same, __100% identical__ 
+to 3 decimal places including quality score. 
+
+If in fact these wines are duplicates, meaning multiple entries for the same 
+wine, this presents a major flaw with these data sets as combined that totals 
+2309 entries duplicating an existing entry or almost 35% of the data-set.
+
+This flaw, along with the varying number of tasters which was a median of 3 
+implying both that there may have been fewer or more tasters and that the 
+quality scores are rounded averages taints the data in my opinion.
+
+The data also lacked a lot of important features critical to predicting 
+quality such as
+
+Additional items relating to quality:
+
+* Grape(s) used
+* Precise mix of grapes
+* Vintage 
+* Estimated age of maturity
+* Oak or stainless steel aging
+* Acetaldehyde levels : one of the most important sensory carbonyl compounds 
+in wine
+* Glycerol, the most abundant compound in wine after water and alcohol, it has 
+been frequently suggested by winemakers, enologists and wine writers, that 
+glycerol contributes positively to wine quality. The perceived contribution has 
+been defined in terms of mouth-feel and texture properties, and is thought to 
+be strongly dependent on the glycerol concentration in the wine. In general, 
+higher glycerol levels are considered to improve wine quality
+* Tannins, a key factor in red wine taste and mouth-feel
+* Minerals such as potassium, an important factor in pH and tartrate stability 
+and others such as iron, copper, calcium etc all contribute to the flavor and 
+stability of the wine
+* Hydroxycinnamates which can contribute negatively to taste and smell
+* Flavonols which have been shown to have direct impact on a wine's  market 
+value (and therefore its quality) and affect color intensity, a factor which 
+expert tasters consider in their scoring of wines
+* Proanthocyanidins which strongly influence the perceived astringency of 
+the wine
+* Oak Lactones which affect the flavor of wine aged in oak
+* Damascenone an important factor in the odor of white wines and possibly some 
+reds
+* Volatile Thiols, an important compound affecting odor in some white and 
+red varietals
+* Norisoprenoids which affect aroma and taste in white wines
+* Terpenes another aromatic driver
+* Volatile Phenols which have huge sensory impact on wine imparting a variety 
+of flavor and scents depending on variety
+  
+The above list is not comprehensive. 
+
+It is possible that the varieties of wines in these data-sets did not contain or 
+were not affected by all of these but it is highly improbable that they do not contain/were affected by some of these. Many of these factors are arguably of 
+equal or greater importance to the wine quality than the compounds included 
+in the data-sets. 
+  
+
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+
+I did create a LDA model which performed poorly. There are several reasons or 
+factors that may have impacted it's performance.
+
+* I am sure I could have done further analysis to better isolate the 
+interactions between compounds.
+* In part because the data was lacking in known key quality indicators. 
+* My decision to eliminate poorer and excellent quality wines from the 
+analysis and focus on "normal" wines.
+
+The model I created ranged from less than 34% accuracy for red wines 
+to almost 44% accuracy for white wines. 
+
+As this was only an initial exploration of the data, the number of wines 
+contained was quite small in relation to the wine world as a whole and given 
+the issues with data quality I identified earlier I feel the model performed 
+quite well as a starting point especially for dry red wines. 
+
+However, much can be done to improve the model including deeper and more complex 
+analysis of the interactions between compounds, looking at other compounds known 
+to impact quality that were not included in this data-set, perhaps building a 
+neural network to train and test on the data and clarifying the issues with
+duplicate entries.
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+
+
+```{r pH_zoom_final, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+zoomphR <- subset(rw, rw$pH >=3.18 & rw$pH <= 3.32)
+phlog1f <- ggplot(data=zoomphR, aes(x = pH ))+
+  geom_histogram(binwidth = .01, color="black", fill="steelblue")+
+  geom_vline(xintercept = 3.311113, color="red", linetype="longdash", 
+             size=1)+
+  labs(title="Red Wine pH", x="pH", y = "Count")+
+  scale_x_continuous(breaks=seq(3.1, 3.32, by =.02))
+
+
+zoomphW <- subset(ww, ww$pH >=3.18 & ww$pH <= 3.32)
+phlog2f <- ggplot(data= zoomphW, aes(x = pH))+
+  geom_histogram(binwidth = .01, color="black", fill="steelblue")+
+  geom_vline(xintercept = 3.188267, color="red", linetype="longdash", 
+             size=1)+
+  labs(title="White Wine pH",x="pH", y = "Count")+
+  scale_x_continuous(breaks=seq(3.1, 3.32, by =.02))
+
+grid.arrange(phlog1,phlog2, ncol = 1 )
+```
+
+
+### Description One
+
+This plot demonstrates how vast a difference a few tenths of a decimal can make 
+when considering pH levels. pH is a __logarithmic__ scale. A pH of 3 is 10x as 
+acidic as a pH of 4. In this plot I have zoomed in on pH to show clearly how far 
+apart the mean pH levels between red and white wines actually are.
+
+A mean pH of 3.31 for reds and 3.19 for whites tells us that the mean acidity 
+for white wines is actually about _twice_ as acidic as reds.
+
+
+
+### Plot Two
+
+```{r d_v_dd_final, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+ddf_1 <- ggplot(redDry, aes(x=density)) +
+  geom_histogram(bins=15, colour="black", fill="green")+
+  labs(title="Density g/cm3 Dry Reds")
+
+ddf_2 <- ggplot(whiteDry, aes(x=density)) +
+  geom_histogram(bins=15, colour="black", fill="green")+
+  labs(title="Density g/cm3 Dry Whites")
+
+ddf_3 <- ggplot(redDry, aes(x=densityDrivers)) +
+  geom_histogram(bins=15, colour="black", fill="red")+
+  labs(title="Density Drivers g/cm3 Dry Reds")
+
+ddf_4 <- ggplot(whiteDry, aes(x=densityDrivers)) +
+  geom_histogram(bins=15, colour="black", fill="red")+
+  labs(title="Density Drivers g/cm3 Dry Whites")
+
+grid.arrange(ddf_1, ddf_2, ddf_3, ddf_4, ncol=2)
+```
+
+### Description Two
+
+As part of my analysis I explored density including calculating the impact of each variable in the data-set on density.
+
+This plot shows that while the density calculations were quite close, they were not exact, implying that either there are variables not included in the data-set that contribute to density or that all the wines in the data-set were not standard sized bottles, or both.
+
+Nonetheless, while density drivers are different from actual densities they are 
+within .001 to .006 g/cm^3^.
+
+Interestingly there are farther off for red wines than white.
+
+
+
+### Plot Three
+
+
+```{r qu_sulp_va_final, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE,           cache.path = 'cache/', fig.path='figure/'}
+
+# intentionally not using grid.arrange so the plots are easier to read having
+# larger heights
+ggplot(aes(x = sulphates, 
+           y = volatile.acidity  , color = factor(quality)), 
+       data = redDry) +
+      geom_point(alpha = 0.6, size = 2) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+  scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="Red Wines: Volatile Acidity, Suphates and Quality",
+       x = 'Sulphates - g / dm3', y = "Volatile Acidity - g / dm3" )
+
+ggplot(aes(x = sulphates, 
+           y = volatile.acidity  , color = factor(quality)), 
+       data = whiteDry) +
+      geom_point(alpha = 0.6, size = 2) +
+      geom_smooth(method = "lm", se = FALSE,size=1)  +
+  scale_color_brewer(type='seq',palette = "RdGy",
+                   guide=guide_legend(title='Quality'))+
+  theme(plot.title = element_text(size=11), 
+        panel.grid.minor = element_line(colour = "black", linetype="dotted"), panel.grid.major = element_line(colour = "black"))+
+  labs(title="White Wines : Volatile Acidity, Suphates and Quality",
+       x = 'Sulphates - g / dm3', y = "Volatile Acidity - g / dm3")
+```
+
+
+
+### Description Three
+
+It was interesting to see the impact sulphates and volatile acidity had on the 
+quality of the wine. While I expected more interaction between the two variables 
+it was not clear they correlated well together.
+
+However, as a general rule of thumb it appears lower sulphates and volatile 
+acidity in red wines is a good indicator of quality, while quality white wines 
+seem to favor lower volatile acidity but are more tolerant of sulphates than 
+reds.
+
+------
+
+# Reflection
+
+I spent quite a bit of time looking at various compounds, their interactions 
+and thinking about what story the data was telling. It proved quite difficult 
+to establish any relationships that could be said to definitively relate to 
+quality. There were trends but for each trend there were a multitude of 
+exceptions.
+
+There were some obvious correlations, like citric acid, volatile acids, fixed 
+acids and sugars impact on pH levels, alcohol and sugars impact on density, 
+and the relationship between sulfur compounds.
+
+I had quite a bit of fun playing around with density and was quite surprised 
+how each component affected it. Some, like citric acid less than you would 
+first expect while others, like sugar and alcohol, were obvious from the start.
+
+The original curators of the data-set explicitly bring up two interesting 
+points about this data-set: 
+
+* _The classes are ordered and not balanced (e.g. there are much more normal_ 
+_wines than excellent or poor ones)._ 
+
+* _We are not sure if all input variables are relevant._ 
+
+Certainly I found in my analysis that the compounds included in this data-set do 
+not seem to be enough to predict quality. Whether some should be excluded can 
+be debated, as I noted earlier many could potentially be grouped together 
+implying some level of redundancy. What is clear to me, based on my knowledge 
+and experience with wines, is that many important factors are not included 
+that are known to have pronounced impacts on perceived quality.
+
+I do wonder if I made the right choice to eliminate quality outliers and just 
+focus on levels 4-7. This decision meant that I was mostly looking at normal 
+wines rather than excellent or poor ones. Had I included all quality levels I 
+may have been able to discern trends more easily, though given the outlier 
+nature of the poor and excellent wines, I would be uncertain if the trend was 
+real or an artifact of the outliers. 
+
+I do think this data-set suffers from several limitations I have mentioned 
+throughout this report. One I haven't emphasized is the fact that all these 
+wines come from just one country Portugal. I think a larger data-set more 
+representative of the world of wine, covering several geographic regions and 
+with more information about things like types of grapes, methods of aging and 
+storage and more quality driving compounds this data-set excluded would be very interesting to analyze. 
+
+I was quite surprised that there were no sweet reds. Portugal is most famous 
+for it's red port wines which are sweet red wines and yet this data-set did not 
+have a single entry in the sweet red category. 
+
+A target number of about 50,000-75,000 wines from around the world representing 
+a fuller range of types of wines, __quality levels__ and __sweetness levels__ 
+across all quality levels would be ideal. With significant numbers of excellent 
+and poor quality wines in all groupings a more confident analysis of quality 
+drivers could be made.
+
+Ultimately however, taste is subjective. So I think developing a model to aid winemakers in decision making by better defining the cross relationships between several variables (not just 2 or 3) would be of more value than developing a 
+quality predictor. After all, just because an expert loves a wine doesn't mean 
+that the less trained/less sensitive palate of the ordinary consumer would 
+agree. 
+
+In fact, most ordinary consumers have very different preferences from 
+professionals so it could also be interesting to develop a preference model for ordinary consumers, with a big enough data-set and machine learning a 
+recommendation engine could be built that could train and adapt to a given 
+consumers taste profile or "chemical palate" and make recommendations based on chemistry not just varietals or styles.

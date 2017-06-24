@@ -1,0 +1,13 @@
+I used UC Davis UoC Waterhouse Lab (http://waterhouse.ucdavis.edu/), Practical Winery & Vineyard Journal (https://www.practicalwinery.com/) and the Australian Wine Research Institute (https://www.awri.com.au/) websites as sources of further information for insights into the variables contained in the wine dataset and how they might contribute to the quality score or relate to each other.  
+ 
+Various other sources were used in my research for things like creating new categorical labels or better understanding relationships between variables. I have itemized the source and its use purpose in the list below.  
+
+Additional resources
+
+* https://en.wikipedia.org/wiki/Sweetness_of_wine : Used to create the categorical variable Sweet
+* http://chemistry.elmhurst.edu/vchembook/184ph.html : Understanding pH
+* https://www.reference.com/science/ph-level-sugar-b4748abdf49c1d6b : Understanding pH of sugar
+
+
+Modeling resource
+* http://little-book-of-r-for-multivariate-analysis.readthedocs.io/en/latest/src/multivariateanalysis.html  used for code relating to the prediction model. Note: the code used is cited inline in the RMD file as well.
